@@ -81,40 +81,100 @@
 - **Integration**: Seamlessly integrated with Event Detail Page
 
 ### 5.4 Scoring Input
-- Hole-by-hole entry interface.
+- Hole-by-hole entry interface with bulk save (all 18 holes at once).
 - Accessible to Event Admin and Event User.
-- Supports auto-calculation of total strokes and derived scores based on scoring type.
+- **Stores raw strokes only** - NO calculations performed during score entry.
 - Score input validation (numeric, within reasonable range).
+- Real-time WebSocket broadcast on save to update Live Score page.
+- **Performance optimized**: Score entry is 5-10x faster without calculation overhead.
 
-### 5.5 Scoring Logic
+### 5.5 Scoring Logic (Winner Page Calculation Only)
+
+**Important**: Calculations are NOT performed during score entry. All calculations happen on Winner Page when Event Admin/Super Admin clicks "Calculate Result" button.
 
 | Type | Formula / Logic |
 |------|------------------|
-| **Stroke Play** | Total = Sum of strokes. Lowest total wins. Tie → Match play. |
+| **Stroke Play** | Total = Sum of strokes. Lowest total wins. |
 | **Net Stroke** | Net = Gross − Declared Handicap. Lowest Net wins. |
 | **System 36** | Assign points per hole: Birdie = 2, Par = 1, Bogey+ = 0. HCP = 36 − Total Points. Net = Gross − HCP. |
 | **Stableford** | Points: 0 (≥Double Bogey), 1 (Bogey), 2 (Par), 3 (Birdie), 4 (Eagle), 5 (Albatross). Highest total points wins. |
 
-### 5.6 Live Scoring & Leaderboard
-- Auto-refresh leaderboard (polling every 10–15s).
-- Displays:
-  - Player Name
-  - Gross Score
-  - Net Score / Points
-  - Division
-  - Rank
-- Publicly viewable without login (read-only endpoint).
+**Tie-breaking Rule**: Countback method (last 9 holes → last 6 → last 3 → last hole).
 
-### 5.7 Winner Page
-- Display per division.
-- Awards:
-  - Best Gross
-  - Best Net
-- Handles ties using countback rule (last 9 → last 6 → last 3 → last hole).
+### 5.6 Live Score Display (Real-time Scorecard View)
+
+**Purpose**: Public display page for tournaments - shows hole-by-hole scores in real-time on TV/projector or web.
+
+**Key Features**:
+- **Scorecard Grid Layout**: Displays hole-by-hole raw strokes for each participant (like scoring page, but read-only)
+- **No Calculations Shown**: Only raw strokes and declared handicap - no gross/net totals or rankings
+- **Real-time Updates**: WebSocket integration for instant score updates when saved
+- **Auto-scrolling Carousel**:
+  - Automatically scrolls through participants every 5 seconds
+  - Pauses when user clicks Previous/Next navigation buttons
+  - Shows all participants on single page if they fit (no scrolling needed)
+- **Smart Sorting**:
+  - Primary: Number of holes completed (descending)
+  - Secondary: Gross or Net score (user-selectable toggle) - lowest first
+  - Participants with zero scores stay at bottom
+- **Responsive Layout**: Auto-fit based on screen size (displays hole-by-hole detail)
+- **Full-screen Mode**: Dedicated button for large screen display (TV/projector)
+- **Update Indicator**: Shows "Updated X seconds ago" timestamp
+- **Score Legend**: Color codes (Eagle=blue, Birdie=green, Par=white, Bogey=yellow, Double+=red)
+- **Publicly viewable** without login (read-only endpoint)
+
+**Display Format**:
+- Event Name + "Live Score" header
+- Score Legend
+- Participant scorecards with all 18 holes
+- Previous/Next navigation buttons
+- Gross/Net sort toggle
+- Full-screen button
+
+### 5.7 Winner Page (Calculation & Results Display)
+
+**Purpose**: Admin-only page to calculate final results and display winners.
+
+**Pre-Calculation State**:
+- Shows message: "No results yet - Click 'Calculate Result' to determine winners"
+- "Calculate Result" button (accessible by Super Admin and Event Admin only)
+
+**Calculation Process**:
+- **Manual Trigger**: Admin clicks "Calculate Result" button
+- **Progress Indicator**: Shows "Calculating 45/150 scorecards..." with progress bar
+- **Batch Processing**: Calculates all participants using Strategy Pattern
+  - Gross scores (sum of all strokes)
+  - Net scores (gross - declared handicap, respecting scoring type)
+  - Rankings per division
+  - Overall rankings
+  - Tie-breaking using countback (last 9 → last 6 → last 3 → last hole)
+- **Permanent Storage**: Results stored in database (LeaderboardCache or WinnerResults table)
+- **Re-calculation**: If scores updated after calculation, shows warning banner: "Scores updated since last calculation - Recalculate to see latest results"
+
+**Post-Calculation Display**:
+- **Overall Awards**:
+  - Best Gross (single winner across all divisions)
+  - Best Net (single winner across all divisions)
+- **Division Winners**:
+  - Top 3 per division with podium display (1st, 2nd, 3rd)
+  - Configurable number of winners per division (EventDivision.num_winners field)
+- **Award Display**:
+  - Participant Name
+  - Division
+  - Gross Score
+  - Net Score
+  - System 36 Points (if applicable)
+  - Rank with tie indicator
+
+**Configuration**:
+- Number of winners per division configurable in EventDivision model
+- Default: 3 winners per division
+- Tie-breaking: Automatic countback method
 
 ### 5.8 Reporting & Export
 - Export final leaderboard and scorecards to `.xlsx`.
 - Include metadata (event name, date, course, scoring type).
+- Export winner results with awards and rankings.
 
 ### 5.9 Multi-language Support
 - English and Bahasa Indonesia.
@@ -190,6 +250,19 @@ erDiagram
         int hole_id
         int strokes
     }
+
+    WINNER_RESULTS {
+        int id
+        int event_id
+        int participant_id
+        int gross_score
+        int net_score
+        int rank_overall
+        int rank_division
+        int points
+        datetime calculated_at
+        bool is_stale
+    }
 ```
 
 ---
@@ -203,8 +276,10 @@ erDiagram
 | `/courses` | CRUD | Manage courses & holes | Super Admin |
 | `/events` | CRUD | Manage tournaments | Event Admin |
 | `/events/{id}/participants` | POST / GET | Upload or list participants | Event Admin |
-| `/scores` | POST / PUT | Submit hole-by-hole scores | Event Admin / Event User |
-| `/leaderboard/{event_id}` | GET | View leaderboard | Public |
+| `/scorecards/bulk` | POST | Submit hole-by-hole scores (bulk save all 18 holes) | Event Admin / Event User |
+| `/live-score/{event_id}` | GET | View live score display (real-time, public) | Public |
+| `/winners/{event_id}/calculate` | POST | Calculate winner results with progress | Event Admin / Super Admin |
+| `/winners/{event_id}` | GET | View winner results | Event Admin / Super Admin |
 | `/export/{event_id}` | GET | Export to Excel | Event Admin |
 
 ---
@@ -217,17 +292,31 @@ erDiagram
 
 **Score Entry Page**
 - Hole-by-hole grid layout (18 holes)
-- Auto-total calculation
-- Submit button with confirmation prompt
+- Bulk save button (saves all 18 holes at once)
+- **NO calculations** shown during entry (raw strokes only)
+- Submit triggers WebSocket broadcast for live updates
 
-**Leaderboard**
-- Responsive table
-- Columns: Player | Division | Gross | Net | Points | Rank
-- Auto-refresh every 10–15 seconds
+**Live Score Display** (Replaces Leaderboard)
+- **Scorecard grid layout** showing hole-by-hole raw strokes
+- **Auto-scrolling carousel** (5-second interval) through participants
+- **Previous/Next navigation** buttons (pauses auto-scroll)
+- **Gross/Net sort toggle** button
+- **Full-screen mode** button for TV/projector display
+- Score legend with color codes
+- "Updated X seconds ago" timestamp
+- Real-time WebSocket updates (merged with scroll transitions)
+- Responsive auto-fit layout based on screen size
+- Publicly accessible without login
 
-**Winner Page**
-- Division filter
-- Highlight winners visually
+**Winner Page** (New)
+- **Pre-calculation**: "Calculate Result" button with instructions
+- **During calculation**: Progress bar ("Calculating 45/150 scorecards...")
+- **Post-calculation**:
+  - Best Gross and Best Net awards (overall)
+  - Top 3 per division with podium display
+  - Warning banner if scores updated after calculation
+  - Re-calculate button
+- Accessible by Event Admin and Super Admin only
 
 **Multilingual Toggle**
 - Language switcher (EN / ID) in header
@@ -242,13 +331,26 @@ erDiagram
 
 ---
 
-## 11. Future Enhancements
+## 11. Migration & Data Management
+
+### 11.1 Existing Data Migration
+- **Clear all cached calculations**: Remove LeaderboardCache entries for all existing events
+- **Require recalculation**: Event admins must use Winner Page to recalculate results
+- **Preserve raw scores**: All existing scorecard strokes remain intact
+- **No automatic migration**: Admin decides when to recalculate per event
+
+### 11.2 EventDivision Schema Update
+- Add `num_winners` field (integer, default: 3)
+- Configures number of winners to display per division on Winner Page
+- Editable via EventDivisionManager component
+
+## 12. Future Enhancements
 - Multi-day tournament support
 - Handicap index calculation (auto from history)
 - Offline mode (PWA caching)
-- Real-time push via WebSocket / Socket.IO
 - PDF export of scorecards
 - Cloud deployment with PostgreSQL
+- Additional awards (Longest Drive, Nearest to Pin, etc.)
 
 ---
 
