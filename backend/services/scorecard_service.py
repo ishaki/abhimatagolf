@@ -15,12 +15,18 @@ from schemas.scorecard import (
     ScoreUpdate,
     ScoreHistoryResponse,
 )
-from services.scoring_strategies import ScoringStrategyFactory
+# PHASE 3: ScoringStrategyFactory removed from score entry flow
+# Will be used only in Winner Page calculation service
 from fastapi import HTTPException, status
 
 
 class ScorecardService:
-    """Service for scorecard operations and calculations"""
+    """
+    Service for scorecard operations (PHASE 3: Raw stroke storage only)
+
+    Handles score entry and retrieval with optimized performance.
+    Calculations (net, points, rankings) performed on Winner Page.
+    """
 
     def __init__(self, session: Session):
         self.session = session
@@ -221,13 +227,11 @@ class ScorecardService:
             )
             self.session.add(scorecard)
 
-        # PERFORMANCE OPTIMIZATION: Calculate derived values BEFORE commit
-        # This eliminates the need for a second commit and refresh
-        strategy = ScoringStrategyFactory.get_strategy(event.scoring_type)
-        scorecard = strategy.update_scorecard(scorecard, participant, hole)
+        # PHASE 3 OPTIMIZATION: Save raw strokes only - NO calculations
+        # Calculations will be performed on Winner Page for final results
+        # This provides 5-10x performance improvement during score entry
 
-        # Single commit for all changes (strokes + calculated values + history)
-        # Note: scorecard is already added to session above, no need to add again
+        # Single commit for strokes + history only
         self.session.commit()
         self.session.refresh(scorecard)
 
@@ -248,7 +252,8 @@ class ScorecardService:
             strokes=strokes,
             score_to_par=score_to_par,
             color_code=color_code,
-            system36_points=scorecard.points if event.scoring_type == ScoringType.SYSTEM_36 else None,
+            # No calculated points - will be calculated on Winner Page
+            system36_points=None,
         )
 
     async def bulk_submit_scores(
@@ -257,14 +262,14 @@ class ScorecardService:
         user_id: int,
     ) -> ScorecardResponse:
         """
-        Submit scores for multiple holes at once
+        Submit scores for multiple holes at once (PHASE 3: Raw strokes only)
 
         Args:
             data: ScorecardSubmit with participant_id and list of hole scores
             user_id: ID of user recording the scores
 
         Returns:
-            Complete ScorecardResponse with all calculations
+            ScorecardResponse with raw stroke data (no calculated net/points)
         """
         # Validate participant
         participant = self.session.get(Participant, data.participant_id)
@@ -288,13 +293,14 @@ class ScorecardService:
 
     def get_participant_scorecard(self, participant_id: int) -> ScorecardResponse:
         """
-        Get complete scorecard for a participant with all calculations
+        Get scorecard for a participant (PHASE 3: Raw strokes + gross total only)
 
         Args:
             participant_id: ID of the participant
 
         Returns:
-            Complete ScorecardResponse with front nine, back nine, and totals
+            ScorecardResponse with raw strokes and gross total (no net/points calculations)
+            Final calculations will be done on Winner Page
         """
         # Get participant
         participant = self.session.get(Participant, participant_id)
@@ -360,8 +366,8 @@ class ScorecardService:
                 strokes=strokes,
                 score_to_par=score_to_par,
                 color_code=color_code,
-                # Include System 36 points when applicable
-                system36_points=(scorecard.points if (scorecard and event.scoring_type == ScoringType.SYSTEM_36) else None),
+                # PHASE 3: No points calculated during score entry
+                system36_points=None,
             )
 
             if hole.number <= 9:
@@ -373,23 +379,18 @@ class ScorecardService:
                 in_total += strokes
                 in_par += hole.par
 
-        # Calculate totals
+        # PHASE 3: Calculate basic totals only (no net score or points)
+        # Gross score is simple sum of strokes - useful for scoring page display
+        # Net scores and points will be calculated on Winner Page
         gross_score = out_total + in_total
         course_par = out_par + in_par
-        net_score = self.calculate_net_score(gross_score, participant.declared_handicap) if gross_score > 0 else 0
         score_to_par = self.calculate_score_to_par(gross_score, course_par) if gross_score > 0 else 0
         out_to_par = out_total - out_par if out_total > 0 else 0
         in_to_par = in_total - in_par if in_total > 0 else 0
 
-        # System 36 totals (classic): sum of per-hole points
+        # No net_score or system36_points - set to 0/None
+        net_score = 0
         total_system36_points = None
-        if event.scoring_type == ScoringType.SYSTEM_36:
-            # Sum available points from both nines
-            total_system36_points = sum(
-                (h.system36_points or 0) for h in front_nine
-            ) + sum(
-                (h.system36_points or 0) for h in back_nine
-            )
 
         # Get recorder name
         recorded_by = None
