@@ -12,8 +12,7 @@ import ParticipantForm from '@/components/participants/ParticipantForm';
 import ParticipantUpload from '@/components/participants/ParticipantUpload';
 import { Participant } from '@/services/participantService';
 import MultiParticipantScorecard from '@/components/scoring/MultiParticipantScorecard';
-import LeaderboardTable from '@/components/leaderboard/LeaderboardTable';
-import FullScreenLeaderboard from '@/components/leaderboard/FullScreenLeaderboard';
+import { ExternalLink, Trophy } from 'lucide-react';
 
 const EventDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -24,11 +23,6 @@ const EventDetailPage: React.FC = () => {
   const [participantViewMode, setParticipantViewMode] = useState<'list' | 'form' | 'upload'>('list');
   const [editingParticipant, setEditingParticipant] = useState<Participant | undefined>(undefined);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [isLeaderboardFullScreen, setIsLeaderboardFullScreen] = useState(false);
-  
-  // Auto-scroll configuration
-  const [autoScrollInterval] = useState(15); // Default 15 seconds
-  const [enableAutoScroll] = useState(true);
 
   useEffect(() => {
     if (id) {
@@ -90,10 +84,6 @@ const EventDetailPage: React.FC = () => {
   const handleParticipantRefresh = () => {
     setRefreshKey(prev => prev + 1);
     loadEvent(); // Refresh participant count
-  };
-
-  const handleToggleLeaderboardFullScreen = () => {
-    setIsLeaderboardFullScreen(!isLeaderboardFullScreen);
   };
 
   // Quick Actions Sidebar handlers
@@ -259,10 +249,10 @@ const EventDetailPage: React.FC = () => {
                   Scoring
                 </TabsTrigger>
                 <TabsTrigger
-                  value="leaderboard"
+                  value="livescore"
                   className="data-[state=active]:border-b-2 data-[state=active]:border-blue-600 rounded-none"
                 >
-                  Leaderboard
+                  Live Score
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -365,15 +355,62 @@ const EventDetailPage: React.FC = () => {
               />
             </TabsContent>
 
-            <TabsContent value="leaderboard" className="p-8 m-0">
-              <LeaderboardTable
-                eventId={event!.id}
-                onScoreUpdate={handleEventUpdate}
-                isFullScreen={isLeaderboardFullScreen}
-                onToggleFullScreen={handleToggleLeaderboardFullScreen}
-                autoScrollInterval={autoScrollInterval}
-                enableAutoScroll={enableAutoScroll}
-              />
+            <TabsContent value="livescore" className="p-8 m-0">
+              <div className="max-w-2xl mx-auto">
+                <div className="bg-white rounded-lg shadow-md p-8 text-center">
+                  <div className="mb-6">
+                    <Trophy className="h-16 w-16 text-blue-500 mx-auto mb-4" />
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                      Live Score Display
+                    </h2>
+                    <p className="text-gray-600">
+                      View real-time scores in a public display optimized for TV and projectors
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <Button
+                      onClick={() => window.open(`/live-score/${event!.id}`, '_blank')}
+                      size="lg"
+                      className="w-full bg-blue-500 hover:bg-blue-600 text-white"
+                    >
+                      <ExternalLink className="h-5 w-5 mr-2" />
+                      Open Live Score Display
+                    </Button>
+
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
+                      <h3 className="font-semibold text-blue-900 mb-2">Features:</h3>
+                      <ul className="text-sm text-blue-800 space-y-1">
+                        <li>✓ Auto-scrolling carousel (5 seconds per page)</li>
+                        <li>✓ Real-time score updates via WebSocket</li>
+                        <li>✓ Full-screen mode for TV/projector</li>
+                        <li>✓ Color-coded hole scores (Eagle, Birdie, Par, Bogey, Double+)</li>
+                        <li>✓ Manual navigation controls (prev/next)</li>
+                        <li>✓ No authentication required (public display)</li>
+                      </ul>
+                    </div>
+
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-left">
+                      <h3 className="font-semibold text-gray-900 mb-2">Share this link:</h3>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 bg-white border border-gray-300 rounded px-3 py-2 text-sm text-gray-700">
+                          {window.location.origin}/live-score/{event!.id}
+                        </code>
+                        <Button
+                          onClick={() => {
+                            navigator.clipboard.writeText(`${window.location.origin}/live-score/${event!.id}`);
+                            toast.success('Link copied to clipboard!');
+                          }}
+                          variant="outline"
+                          size="sm"
+                        >
+                          Copy
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </TabsContent>
             </div>
           </Tabs>
@@ -438,18 +475,6 @@ const EventDetailPage: React.FC = () => {
             </Button>
           </div>
         </div>
-      )}
-
-      {/* Full Screen Leaderboard */}
-      {isLeaderboardFullScreen && event && (
-        <FullScreenLeaderboard
-          eventId={event.id}
-          eventName={event.name}
-          onClose={handleToggleLeaderboardFullScreen}
-          onScoreUpdate={handleEventUpdate}
-          autoScrollInterval={autoScrollInterval}
-          enableAutoScroll={enableAutoScroll}
-        />
       )}
     </div>
   );

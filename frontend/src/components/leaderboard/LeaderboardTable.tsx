@@ -45,7 +45,7 @@ const LeaderboardTable: React.FC<LeaderboardTableProps> = ({
   const [currentScrollIndex, setCurrentScrollIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const tableBodyRef = useRef<HTMLDivElement>(null);
-  const scrollIntervalRef = useRef<number | null>(null);
+  const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     loadLeaderboard();

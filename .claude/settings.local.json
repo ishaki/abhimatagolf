@@ -5,7 +5,13 @@
       "Bash(python scripts/backfill_scores.py --dry-run)",
       "Bash(python scripts/backfill_scores.py)",
       "Bash(python scripts/test_scoring_refactoring.py)",
-      "Bash(python scripts/test_end_to_end_workflow.py)"
+      "Bash(python scripts/test_end_to_end_workflow.py)",
+      "Bash(timeout 10 python:*)",
+      "Bash(git add:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm install socket.io-client)",
+      "Bash(npm install:*)",
+      "Bash(npm run dev)"
     ],
     "deny": [],
     "ask": []

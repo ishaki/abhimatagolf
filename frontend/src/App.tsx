@@ -8,6 +8,7 @@ import CoursesPage from './pages/CoursesPage'
 import EventsPage from './pages/EventsPage'
 import EventDetailPage from './pages/EventDetailPage'
 import ParticipantsPage from './pages/ParticipantsPage'
+import LiveScorePage from './pages/LiveScorePage' // Phase 3.2: Public Live Score
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import Layout from './components/layout/Layout'
 
@@ -28,6 +29,8 @@ function App() {
         <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            {/* Phase 3.2: Public Live Score Page (no auth required) */}
+            <Route path="/live-score/:eventId" element={<LiveScorePage />} />
             <Route
               path="/*"
               element={
