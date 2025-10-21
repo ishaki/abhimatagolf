@@ -184,7 +184,7 @@ const ScorecardGrid: React.FC<ScorecardGridProps> = ({
   const outTotal = calculateSubtotal(1, 9);
   const inTotal = calculateSubtotal(10, 18);
   const grossScore = outTotal + inTotal;
-  const netScore = grossScore > 0 ? grossScore - scorecard.handicap : 0;
+  // PHASE 3: No net score calculation - will be done on Winner Page
 
   return (
     <div className="space-y-6">
@@ -367,8 +367,8 @@ const ScorecardGrid: React.FC<ScorecardGridProps> = ({
         </div>
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* Summary - PHASE 3: Simplified (Gross Score + To Par only) */}
+      <div className="grid grid-cols-3 gap-4">
         <div className="bg-white border rounded-lg p-4">
           <div className="text-sm text-gray-600">Holes Completed</div>
           <div className="text-2xl font-bold text-gray-900">
@@ -380,10 +380,6 @@ const ScorecardGrid: React.FC<ScorecardGridProps> = ({
           <div className="text-2xl font-bold text-blue-600">{grossScore || '-'}</div>
         </div>
         <div className="bg-white border rounded-lg p-4">
-          <div className="text-sm text-gray-600">Net Score</div>
-          <div className="text-2xl font-bold text-indigo-600">{netScore || '-'}</div>
-        </div>
-        <div className="bg-white border rounded-lg p-4">
           <div className="text-sm text-gray-600">To Par</div>
           <div className={`text-2xl font-bold ${
             grossScore > 0 ? (grossScore - scorecard.course_par >= 0 ? 'text-red-600' : 'text-green-600') : 'text-gray-400'
@@ -391,6 +387,13 @@ const ScorecardGrid: React.FC<ScorecardGridProps> = ({
             {grossScore > 0 ? formatToPar(grossScore - scorecard.course_par) : '-'}
           </div>
         </div>
+      </div>
+
+      {/* Phase 3 Note */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+        <p className="text-sm text-blue-800">
+          <span className="font-semibold">Note:</span> Final rankings, net scores, and awards will be calculated on the Winner Page after all scores are submitted.
+        </p>
       </div>
 
       {/* Unsaved Changes Warning */}
