@@ -145,7 +145,7 @@ class LiveScoringService:
             participant = self.session.get(Participant, participant_id)
             if not participant:
                 return
-            
+
             score_data = {
                 'participant_id': participant_id,
                 'participant_name': participant.name,
@@ -154,14 +154,16 @@ class LiveScoringService:
                 'timestamp': datetime.utcnow().isoformat(),
                 'event_id': event_id
             }
-            
+
+            # PHASE 3.2: Emit both 'score_updated' (legacy) and 'live_score_update' (new)
             await self.sio.emit('score_updated', score_data, room=f'event_{event_id}')
+            await self.sio.emit('live_score_update', score_data, room=f'event_{event_id}')
             logger.info(f"Score update broadcasted: {score_data}")
-            
+
             # PERFORMANCE OPTIMIZATION: Schedule debounced leaderboard update
             # This eliminates ~1000ms blocking operation
             self._schedule_leaderboard_update(event_id)
-            
+
         except Exception as e:
             logger.error(f"Error broadcasting score update: {e}")
 

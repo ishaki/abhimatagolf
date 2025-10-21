@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from core.config import settings
 from core.database import create_db_and_tables, get_session
 from core.app_logging import logger
-from api import auth, users, courses, events, participants, scorecards, event_divisions, leaderboards, excel
+from api import auth, users, courses, events, participants, scorecards, event_divisions, leaderboards, excel, live_score
 from services.live_scoring_service import LiveScoringService
 import socketio
 import logging
@@ -62,6 +62,7 @@ app.include_router(scorecards.router)
 app.include_router(event_divisions.router)
 app.include_router(leaderboards.router)
 app.include_router(excel.router)
+app.include_router(live_score.router)  # Phase 3.2: Public live score display
 
 
 @app.get("/")
