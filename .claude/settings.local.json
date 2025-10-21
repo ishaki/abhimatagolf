@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python scripts/backfill_scores.py --dry-run --verbose)",
+      "Bash(python scripts/backfill_scores.py --dry-run)",
+      "Bash(python scripts/backfill_scores.py)",
+      "Bash(python scripts/test_scoring_refactoring.py)",
+      "Bash(python scripts/test_end_to_end_workflow.py)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

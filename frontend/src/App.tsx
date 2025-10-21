@@ -1,0 +1,56 @@
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider } from './contexts/AuthContext'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import LoginPage from './pages/LoginPage'
+import Dashboard from './pages/Dashboard'
+import UsersPage from './pages/UsersPage'
+import CoursesPage from './pages/CoursesPage'
+import EventsPage from './pages/EventsPage'
+import EventDetailPage from './pages/EventDetailPage'
+import ParticipantsPage from './pages/ParticipantsPage'
+import ProtectedRoute from './components/auth/ProtectedRoute'
+import Layout from './components/layout/Layout'
+
+// Create a client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+})
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route
+              path="/*"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Routes>
+                      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                      <Route path="/dashboard" element={<Dashboard />} />
+                      <Route path="/users" element={<UsersPage />} />
+                      <Route path="/courses" element={<CoursesPage />} />
+                      <Route path="/events" element={<EventsPage />} />
+                      <Route path="/events/:id" element={<EventDetailPage />} />
+                      <Route path="/participants" element={<ParticipantsPage />} />
+                    </Routes>
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </Router>
+      </AuthProvider>
+    </QueryClientProvider>
+  )
+}
+
+export default App

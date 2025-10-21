@@ -1,0 +1,13 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\frontend",
+    "\\frontend\\src",
+    "\\frontend\\src\\components",
+    "\\frontend\\src\\components\\courses",
+    "\\frontend\\src\\pages",
+    "\\frontend\\src\\services"
+  ],
+  "SelectedNode": "\\frontend\\src\\pages\\CoursesPage.tsx",
+  "PreviewInSolutionExplorer": false
+}

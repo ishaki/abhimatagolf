@@ -1,0 +1,126 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "E:\\zLab_Ishaki\\AbhimataGolf\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\zLab_Ishaki\\AbhimataGolf\\frontend\\src\\pages\\CoursesPage.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\pages\\CoursesPage.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\zLab_Ishaki\\AbhimataGolf\\frontend\\src\\components\\courses\\CourseForm.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\components\\courses\\CourseForm.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\zLab_Ishaki\\AbhimataGolf\\frontend\\src\\services\\courseService.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\services\\courseService.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\zLab_Ishaki\\AbhimataGolf\\frontend\\src\\pages\\Dashboard.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\pages\\Dashboard.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\zLab_Ishaki\\AbhimataGolf\\frontend\\src\\components\\courses\\HoleEditor.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\components\\courses\\HoleEditor.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|E:\\zLab_Ishaki\\AbhimataGolf\\frontend\\src\\components\\courses\\CourseList.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\components\\courses\\CourseList.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 3,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:1:0:{d212f56b-c48a-434c-a121-1c5d80b59b9f}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "courseService.ts",
+              "DocumentMoniker": "E:\\zLab_Ishaki\\AbhimataGolf\\frontend\\src\\services\\courseService.ts",
+              "RelativeDocumentMoniker": "frontend\\src\\services\\courseService.ts",
+              "ToolTip": "E:\\zLab_Ishaki\\AbhimataGolf\\frontend\\src\\services\\courseService.ts",
+              "RelativeToolTip": "frontend\\src\\services\\courseService.ts",
+              "ViewState": "AgIAADcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2025-10-19T04:57:09.314Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "Dashboard.tsx",
+              "DocumentMoniker": "E:\\zLab_Ishaki\\AbhimataGolf\\frontend\\src\\pages\\Dashboard.tsx",
+              "RelativeDocumentMoniker": "frontend\\src\\pages\\Dashboard.tsx",
+              "ToolTip": "E:\\zLab_Ishaki\\AbhimataGolf\\frontend\\src\\pages\\Dashboard.tsx",
+              "RelativeToolTip": "frontend\\src\\pages\\Dashboard.tsx",
+              "ViewState": "AgIAACMAAAAAAAAAAAAAwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2025-10-19T04:56:58.86Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "CoursesPage.tsx",
+              "DocumentMoniker": "E:\\zLab_Ishaki\\AbhimataGolf\\frontend\\src\\pages\\CoursesPage.tsx",
+              "RelativeDocumentMoniker": "frontend\\src\\pages\\CoursesPage.tsx",
+              "ToolTip": "E:\\zLab_Ishaki\\AbhimataGolf\\frontend\\src\\pages\\CoursesPage.tsx",
+              "RelativeToolTip": "frontend\\src\\pages\\CoursesPage.tsx",
+              "ViewState": "AgIAAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2025-10-19T04:56:52.872Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "HoleEditor.tsx",
+              "DocumentMoniker": "E:\\zLab_Ishaki\\AbhimataGolf\\frontend\\src\\components\\courses\\HoleEditor.tsx",
+              "RelativeDocumentMoniker": "frontend\\src\\components\\courses\\HoleEditor.tsx",
+              "ToolTip": "E:\\zLab_Ishaki\\AbhimataGolf\\frontend\\src\\components\\courses\\HoleEditor.tsx",
+              "RelativeToolTip": "frontend\\src\\components\\courses\\HoleEditor.tsx",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2025-10-19T04:56:41.099Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "CourseList.tsx",
+              "DocumentMoniker": "E:\\zLab_Ishaki\\AbhimataGolf\\frontend\\src\\components\\courses\\CourseList.tsx",
+              "RelativeDocumentMoniker": "frontend\\src\\components\\courses\\CourseList.tsx",
+              "ToolTip": "E:\\zLab_Ishaki\\AbhimataGolf\\frontend\\src\\components\\courses\\CourseList.tsx",
+              "RelativeToolTip": "frontend\\src\\components\\courses\\CourseList.tsx",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2025-10-19T04:56:39.152Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "CourseForm.tsx",
+              "DocumentMoniker": "E:\\zLab_Ishaki\\AbhimataGolf\\frontend\\src\\components\\courses\\CourseForm.tsx",
+              "RelativeDocumentMoniker": "frontend\\src\\components\\courses\\CourseForm.tsx",
+              "ToolTip": "E:\\zLab_Ishaki\\AbhimataGolf\\frontend\\src\\components\\courses\\CourseForm.tsx",
+              "RelativeToolTip": "frontend\\src\\components\\courses\\CourseForm.tsx",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2025-10-19T04:56:37.301Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
