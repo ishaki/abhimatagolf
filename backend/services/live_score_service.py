@@ -32,7 +32,8 @@ class LiveScoreService:
     def get_live_score(
         self,
         event_id: int,
-        sort_by: str = "gross"
+        sort_by: str = "gross",
+        filter_empty: bool = False
     ) -> List[ScorecardResponse]:
         """
         Get live score data for all participants in an event
@@ -42,15 +43,16 @@ class LiveScoreService:
             sort_by: Sort method - "gross" or "net" (default: "gross")
                      Note: In Phase 3, both sort the same way (by gross)
                      Net sorting will be enabled after Winner Page calculations
+            filter_empty: If True, exclude participants with no hole scores entered
 
         Returns:
             List of ScorecardResponse for all participants, sorted by:
             1. Holes completed (descending)
             2. Gross score (ascending - lowest first)
-            3. Participants with zero scores at bottom
+            3. Participants with zero scores at bottom (unless filtered out)
         """
         # Check cache first
-        cache_key = f"live_score_{event_id}_{sort_by}"
+        cache_key = f"live_score_{event_id}_{sort_by}_{filter_empty}"
         if cache_key in self._cache:
             cached_data, cached_time = self._cache[cache_key]
             if datetime.utcnow() - cached_time < timedelta(seconds=self._cache_ttl):
@@ -75,6 +77,10 @@ class LiveScoreService:
         for participant in participants:
             scorecard = self._build_participant_scorecard(participant, event)
             scorecards.append(scorecard)
+
+        # Filter out participants with no scores if requested
+        if filter_empty:
+            scorecards = [sc for sc in scorecards if sc.holes_completed > 0]
 
         # Sort scorecards using smart sorting logic
         sorted_scorecards = self._sort_scorecards(scorecards)
@@ -134,7 +140,7 @@ class LiveScoreService:
                 hole_number=hole.number,
                 hole_par=hole.par,
                 hole_distance=hole.distance_meters or 0,
-                handicap_index=hole.handicap_index,
+                handicap_index=hole.stroke_index,
                 strokes=strokes,
                 score_to_par=score_to_par,
                 color_code=color_code,
@@ -213,7 +219,7 @@ class LiveScoreService:
         """
         Invalidate cache for an event (called when scores are updated)
         """
-        # Remove all cache entries for this event
+        # Remove all cache entries for this event (including both filtered and unfiltered)
         keys_to_remove = [k for k in self._cache.keys() if k.startswith(f"live_score_{event_id}_")]
         for key in keys_to_remove:
             del self._cache[key]

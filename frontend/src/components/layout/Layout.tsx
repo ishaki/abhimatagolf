@@ -1,5 +1,6 @@
 import { useAuth } from '@/contexts/AuthContext'
 import { Link, useLocation } from 'react-router-dom'
+import { usePermissions } from '@/hooks/usePermissions'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -7,11 +8,12 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const { user, logout } = useAuth()
+  const { canManageUsers } = usePermissions()
   const location = useLocation()
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', current: location.pathname === '/dashboard' },
-    { name: 'Users', href: '/users', current: location.pathname === '/users' },
+    ...(canManageUsers() ? [{ name: 'Users', href: '/users', current: location.pathname === '/users' }] : []),
     { name: 'Courses', href: '/courses', current: location.pathname === '/courses' },
     { name: 'Events', href: '/events', current: location.pathname === '/events' || location.pathname.startsWith('/events/') },
   ]

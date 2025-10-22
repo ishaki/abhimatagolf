@@ -7,6 +7,7 @@ from .participant import Participant
 from .scorecard import Scorecard, ScoreHistory
 from .user_event import UserEvent, AccessLevel
 from .leaderboard_cache import LeaderboardCache
+from .winner_result import WinnerResult
 
 __all__ = [
     "User",
@@ -21,5 +22,6 @@ __all__ = [
     "ScoreHistory",
     "UserEvent",
     "AccessLevel",
-    "LeaderboardCache"
+    "LeaderboardCache",
+    "WinnerResult"
 ]

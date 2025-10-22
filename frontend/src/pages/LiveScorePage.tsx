@@ -11,15 +11,15 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams } from 'react-router-dom';
 import { Maximize, Minimize, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { getLiveScore, SortBy } from '@/services/liveScoreService';
+import { getLiveScore, SortBy, LiveScoreWebSocket } from '@/services/liveScoreService';
 import { ScorecardResponse } from '@/services/scorecardService';
 import { toast } from 'sonner';
-import { io, Socket } from 'socket.io-client';
+import { tokenStorage } from '@/utils/tokenStorage';
 
 // ========== AUTO-SCROLL CONFIGURATION ==========
 // Easy configuration for auto-scroll behavior
 const AUTO_SCROLL_CONFIG = {
-  SCROLL_INTERVAL_MS: 5000,  // How fast to scroll (in milliseconds) - 5000 = 5 seconds
+  SCROLL_INTERVAL_MS: 7000,  // How fast to scroll (in milliseconds) - 7000 = 7 seconds
   ROW_HEIGHT_PX: 45,          // Estimated height of each row in pixels
 };
 // ================================================
@@ -29,12 +29,13 @@ const LiveScorePage: React.FC = () => {
   const [scorecards, setScorecards] = useState<ScorecardResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<SortBy>('gross');
+  const [filterEmpty, setFilterEmpty] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [isAutoScrolling, setIsAutoScrolling] = useState(true);
   const [currentScrollIndex, setCurrentScrollIndex] = useState(0);
 
-  const socketRef = useRef<Socket | null>(null);
+  const socketRef = useRef<LiveScoreWebSocket | null>(null);
   const tableBodyRef = useRef<HTMLDivElement | null>(null);
   const autoScrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -44,7 +45,7 @@ const LiveScorePage: React.FC = () => {
 
     try {
       setLoading(true);
-      const data = await getLiveScore(parseInt(eventId), sortBy);
+      const data = await getLiveScore(parseInt(eventId), sortBy, filterEmpty);
       setScorecards(data);
       setLastUpdated(new Date());
     } catch (error: any) {
@@ -53,7 +54,7 @@ const LiveScorePage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [eventId, sortBy]);
+  }, [eventId, sortBy, filterEmpty]);
 
   // Initial load
   useEffect(() => {
@@ -64,46 +65,68 @@ const LiveScorePage: React.FC = () => {
   useEffect(() => {
     if (!eventId) return;
 
-    const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-    const socket = io(SOCKET_URL, {
-      transports: ['websocket', 'polling'],
-    });
-
-    socketRef.current = socket;
-
-    socket.on('connect', () => {
+    const token = tokenStorage.getAccessToken();
+    const websocket = new LiveScoreWebSocket(parseInt(eventId));
+    
+    // Set up event handlers
+    websocket.setOnConnect(() => {
       console.log('WebSocket connected for live score');
-      // Join event room
-      socket.emit('join_event', { event_id: parseInt(eventId) });
     });
 
-    socket.on('disconnect', () => {
+    websocket.setOnDisconnect(() => {
       console.log('WebSocket disconnected');
     });
 
-    // Listen for live score updates
-    socket.on('live_score_update', (data: any) => {
-      console.log('Live score update received:', data);
+    websocket.setOnError((error) => {
+      console.warn('WebSocket connection failed, live score will work without real-time updates:', error);
+      // Don't show error to user, just log it
+    });
+
+    websocket.setOnScoreUpdate((data: any) => {
+      console.log('Score updated:', data);
       // Refresh data after a short delay to allow backend to update
       setTimeout(() => {
         loadLiveScore();
       }, 500);
     });
 
-    socket.on('score_updated', (data: any) => {
-      console.log('Score updated:', data);
-      // Also refresh on legacy event
+    websocket.setOnLiveScoreUpdate((data: any) => {
+      console.log('Live score update:', data);
+      // Also refresh on live score update
       setTimeout(() => {
         loadLiveScore();
       }, 500);
     });
 
+    websocket.setOnLeaderboardUpdate((data: any) => {
+      console.log('Leaderboard update:', data);
+      // Refresh data when leaderboard updates
+      setTimeout(() => {
+        loadLiveScore();
+      }, 500);
+    });
+
+    socketRef.current = websocket;
+
+    // Connect to WebSocket
+    websocket.connect(token || undefined).catch((error) => {
+      console.warn('WebSocket connection failed, live score will work without real-time updates:', error);
+    });
+
     return () => {
-      socket.emit('leave_event', { event_id: parseInt(eventId) });
-      socket.disconnect();
+      websocket.disconnect();
       socketRef.current = null;
     };
   }, [eventId, loadLiveScore]);
+
+  // Periodic refresh as fallback when WebSocket is not available
+  useEffect(() => {
+    const refreshInterval = setInterval(() => {
+      loadLiveScore();
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(refreshInterval);
+  }, [loadLiveScore]);
 
   // Auto-scroll logic - scroll by page based on configuration
   useEffect(() => {
@@ -221,7 +244,7 @@ const LiveScorePage: React.FC = () => {
     return () => clearInterval(interval);
   }, [lastUpdated]);
 
-  // Calculate rankings with tie handling - MUST be before early return
+  // Calculate rankings with tie handling - using backend-sorted data
   const getScoreForRanking = useCallback((scorecard: ScorecardResponse) => {
     return sortBy === 'gross' ? (scorecard.gross_score || 999) : (scorecard.net_score || 999);
   }, [sortBy]);
@@ -229,26 +252,31 @@ const LiveScorePage: React.FC = () => {
   const scorecardsWithRanks = useMemo(() => {
     if (scorecards.length === 0) return [];
 
-    // Sort by score
-    const sorted = [...scorecards].sort((a, b) => getScoreForRanking(a) - getScoreForRanking(b));
-
-    // Assign ranks with tie handling
+    // Backend already sorts by: holes completed (desc) → gross score (asc) → zeros last
+    // We just need to assign ranks based on the backend's sorting
     let currentRank = 1;
+    let previousHolesCompleted: number | null = null;
     let previousScore: number | null = null;
     let sameRankCount = 0;
 
-    return sorted.map((scorecard) => {
+    return scorecards.map((scorecard) => {
+      const holesCompleted = scorecard.holes_completed || 0;
       const score = getScoreForRanking(scorecard);
 
-      if (previousScore !== null && score === previousScore) {
-        // Same score as previous = same rank
+      // Check if this player should have the same rank as the previous one
+      if (previousHolesCompleted !== null && 
+          previousScore !== null && 
+          holesCompleted === previousHolesCompleted && 
+          score === previousScore) {
+        // Same holes completed AND same score = same rank
         sameRankCount++;
       } else {
-        // Different score = new rank (skip ranks if there were ties)
+        // Different holes completed OR different score = new rank (skip ranks if there were ties)
         currentRank += sameRankCount;
         sameRankCount = 1;
       }
 
+      previousHolesCompleted = holesCompleted;
       previousScore = score;
 
       return {
@@ -273,11 +301,11 @@ const LiveScorePage: React.FC = () => {
   const getScoreColorClass = (score: number, par: number) => {
     if (score === 0) return 'bg-white';
     const diff = score - par;
-    if (diff <= -2) return 'bg-blue-300'; // Eagle or better
-    if (diff === -1) return 'bg-blue-200'; // Birdie
+    if (diff <= -2) return 'bg-green-600'; // Eagle or better
+    if (diff === -1) return 'bg-green-400'; // Birdie
     if (diff === 0) return 'bg-white border border-gray-300'; // Par
-    if (diff === 1) return 'bg-yellow-300'; // Bogey
-    if (diff >= 2) return 'bg-red-300'; // Double bogey or worse
+    if (diff === 1) return 'bg-red-200'; // Bogey
+    if (diff >= 2) return 'bg-red-400'; // Double bogey or worse
     return 'bg-white';
   };
 
@@ -295,20 +323,20 @@ const LiveScorePage: React.FC = () => {
   return (
     <div className="h-screen w-full flex flex-col bg-gray-50">
       {/* Fixed Header */}
-      <div className="flex-shrink-0 bg-gray-50 px-2 py-4 border-b">
+      <div className="flex-shrink-0 bg-gradient-to-r from-blue-100 via-blue-50 to-blue-100 text-blue-900 shadow-lg border-b border-blue-200/50 px-8 py-6">
         <div className="flex justify-between items-center mb-4">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold text-gray-900">
+              <h1 className="text-3xl font-bold text-blue-900 tracking-tight">
                 {scorecards[0]?.event_name || 'Live Score'}
               </h1>
               {isAutoScrolling && scorecards.length > Math.floor(window.innerHeight / AUTO_SCROLL_CONFIG.ROW_HEIGHT_PX) && (
-                <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full animate-pulse">
+                <span className="px-2 py-1 bg-blue-200 text-blue-800 text-xs font-medium rounded-full animate-pulse">
                   Auto-scrolling (by page)
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-sm text-blue-700 mt-1">
               Updated {timeAgo} • {scorecards.length} participants
             </p>
           </div>
@@ -319,52 +347,71 @@ const LiveScorePage: React.FC = () => {
               onClick={toggleSort}
               variant="outline"
               size="sm"
+              className="bg-blue-200/50 backdrop-blur-sm border-blue-300 text-blue-800 hover:bg-blue-300/50 hover:border-blue-400 transition-all duration-300"
             >
               Sort: {sortBy === 'gross' ? 'Gross' : 'Net'}
+            </Button>
+            <Button
+              onClick={() => setFilterEmpty(!filterEmpty)}
+              variant={filterEmpty ? "default" : "outline"}
+              size="sm"
+              className={filterEmpty ? "bg-blue-500 hover:bg-blue-600 text-white" : "bg-blue-200/50 backdrop-blur-sm border-blue-300 text-blue-800 hover:bg-blue-300/50 hover:border-blue-400 transition-all duration-300"}
+            >
+              {filterEmpty ? 'Show All' : 'Hide Empty'}
             </Button>
             <Button
               onClick={() => setIsAutoScrolling(!isAutoScrolling)}
               variant="outline"
               size="sm"
+              className="bg-blue-200/50 backdrop-blur-sm border-blue-300 text-blue-800 hover:bg-blue-300/50 hover:border-blue-400 transition-all duration-300"
             >
               {isAutoScrolling ? 'Pause Scroll' : 'Resume Scroll'}
             </Button>
-            <Button onClick={toggleFullScreen} variant="outline" size="sm">
+            <Button 
+              onClick={toggleFullScreen} 
+              variant="outline" 
+              size="sm"
+              className="bg-blue-200/50 backdrop-blur-sm border-blue-300 text-blue-800 hover:bg-blue-300/50 hover:border-blue-400 transition-all duration-300"
+            >
               {isFullScreen ? (
                 <Minimize className="h-4 w-4" />
               ) : (
                 <Maximize className="h-4 w-4" />
               )}
             </Button>
-            <Button onClick={loadLiveScore} variant="outline" size="sm">
+            <Button 
+              onClick={loadLiveScore} 
+              variant="outline" 
+              size="sm"
+              className="bg-white/10 backdrop-blur-sm border-white/30 text-white hover:bg-white/20 hover:border-white/40 transition-all duration-300"
+            >
               <RefreshCw className="h-4 w-4" />
             </Button>
           </div>
         </div>
 
         {/* Color Legend */}
-        <div className="p-4 bg-white rounded-lg border shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-700 mb-2">Score Legend:</h3>
+        <div className="p-4 bg-blue-100/50 backdrop-blur-sm rounded-lg border border-blue-200/50 shadow-sm">
           <div className="flex flex-wrap gap-4 text-xs">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-6 bg-blue-300 border border-gray-300 rounded"></div>
-              <span className="font-medium">Eagle or Better (-2 or more)</span>
+              <div className="w-8 h-6 bg-green-600 border border-gray-300 rounded"></div>
+              <span className="font-medium text-blue-800">Eagle or Better (-2 or more)</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-8 h-6 bg-blue-200 border border-gray-300 rounded"></div>
-              <span className="font-medium">Birdie (-1)</span>
+              <div className="w-8 h-6 bg-green-400 border border-gray-300 rounded"></div>
+              <span className="font-medium text-blue-800">Birdie (-1)</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-8 h-6 bg-white border border-gray-300 rounded"></div>
-              <span className="font-medium">Par (0)</span>
+              <span className="font-medium text-blue-800">Par (0)</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-8 h-6 bg-yellow-300 border border-gray-300 rounded"></div>
-              <span className="font-medium">Bogey (+1)</span>
+              <div className="w-8 h-6 bg-red-200 border border-gray-300 rounded"></div>
+              <span className="font-medium text-blue-800">Bogey (+1)</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-8 h-6 bg-red-300 border border-gray-300 rounded"></div>
-              <span className="font-medium">Double Bogey or Worse (+2 or more)</span>
+              <div className="w-8 h-6 bg-red-400 border border-gray-300 rounded"></div>
+              <span className="font-medium text-blue-800">Double Bogey or Worse (+2 or more)</span>
             </div>
           </div>
         </div>
@@ -374,33 +421,33 @@ const LiveScorePage: React.FC = () => {
       <div className="flex-1 overflow-hidden px-2 pb-2">
         {scorecards.length > 0 ? (
           <div className="h-full border rounded-lg shadow-sm bg-white overflow-auto" ref={tableBodyRef}>
-            <table className="w-full text-sm border-collapse">
-              <thead className="sticky top-0 z-10 bg-orange-400 text-white">
+            <table className="w-full text-sm border-collapse table-fixed">
+              <thead className="sticky top-0 z-10 bg-gradient-to-r from-gray-50 via-gray-25 to-gray-50 text-gray-700 border-gray-200">
                 {/* Header Row 1: Hole Numbers */}
                 <tr>
-                  <th className="border border-gray-200 px-3 py-2 text-center font-semibold min-w-[50px]">
+                  <th className="border border-gray-200 px-3 py-2 text-center font-semibold w-16">
                     No
                   </th>
-                  <th className="border border-gray-200 px-4 py-2 text-left font-semibold">
-                    Player
+                  <th className="border border-gray-200 px-4 py-2 text-left font-semibold w-48">
+                    Player / Hole No.
                   </th>
                   {allHoles.slice(0, 9).map((hole) => (
-                    <th key={hole.hole_number} className="border border-gray-200 px-2 py-2 text-center font-semibold min-w-[60px]">
+                    <th key={hole.hole_number} className="border border-gray-200 px-1 py-2 text-center font-semibold w-12">
                       {hole.hole_number}
                     </th>
                   ))}
-                  <th className="border border-gray-200 px-3 py-2 text-center font-semibold bg-orange-500 min-w-[60px]">
+                  <th className="border border-gray-200 px-3 py-2 text-center font-semibold bg-gray-100 w-16">
                     Out
                   </th>
                   {allHoles.slice(9, 18).map((hole) => (
-                    <th key={hole.hole_number} className="border border-gray-200 px-2 py-2 text-center font-semibold min-w-[60px]">
+                    <th key={hole.hole_number} className="border border-gray-200 px-1 py-2 text-center font-semibold w-12">
                       {hole.hole_number}
                     </th>
                   ))}
-                  <th className="border border-gray-200 px-3 py-2 text-center font-semibold bg-orange-500 min-w-[60px]">
+                  <th className="border border-gray-200 px-3 py-2 text-center font-semibold bg-gray-100 w-16">
                     In
                   </th>
-                  <th className="border border-gray-200 px-3 py-2 text-center font-semibold min-w-[70px]">
+                  <th className="border border-gray-200 px-3 py-2 text-center font-semibold w-20">
                     Total
                   </th>
                 </tr>
@@ -410,20 +457,20 @@ const LiveScorePage: React.FC = () => {
                   <td className="border border-gray-200 px-4 py-2"></td>
                   {/* Front 9 Par/Index */}
                   {allHoles.slice(0, 9).map((hole) => (
-                    <td key={`par-${hole.hole_number}`} className="border border-gray-200 px-2 py-1 text-center">
+                    <td key={`par-${hole.hole_number}`} className="border border-gray-200 px-1 py-1 text-center">
                       <div className="font-medium">Par {hole.hole_par}</div>
                     </td>
                   ))}
                   {/* Out column - no par info */}
-                  <td className="border border-gray-200 px-3 py-1 bg-orange-500"></td>
+                  <td className="border border-gray-200 px-3 py-1 bg-gray-100"></td>
                   {/* Back 9 Par/Index */}
                   {allHoles.slice(9, 18).map((hole) => (
-                    <td key={`par-${hole.hole_number}`} className="border border-gray-200 px-2 py-1 text-center">
+                    <td key={`par-${hole.hole_number}`} className="border border-gray-200 px-1 py-1 text-center">
                       <div className="font-medium">Par {hole.hole_par}</div>
                     </td>
                   ))}
                   {/* In column - no par info */}
-                  <td className="border border-gray-200 px-3 py-1 bg-orange-500"></td>
+                  <td className="border border-gray-200 px-3 py-1 bg-gray-100"></td>
                   {/* Total column - no par info */}
                   <td className="border border-gray-200 px-3 py-1"></td>
                 </tr>
@@ -456,14 +503,14 @@ const LiveScorePage: React.FC = () => {
                       {frontNineScores.map(({ hole, score }) => (
                         <td
                           key={`score-${scorecard.participant_id}-${hole.hole_number}`}
-                          className={`border border-gray-200 px-2 py-2 text-center font-semibold ${getScoreColorClass(score, hole.hole_par)}`}
+                          className={`border border-gray-200 px-1 py-2 text-center font-semibold ${getScoreColorClass(score, hole.hole_par)}`}
                         >
                           {score > 0 ? score : '-'}
                         </td>
                       ))}
 
                       {/* Out Total */}
-                      <td className="border border-gray-200 px-3 py-2 text-center font-bold bg-orange-50">
+                      <td className="border border-gray-200 px-3 py-2 text-center font-bold bg-gray-50">
                         {scorecard.out_total || '-'}
                       </td>
 
@@ -471,14 +518,14 @@ const LiveScorePage: React.FC = () => {
                       {backNineScores.map(({ hole, score }) => (
                         <td
                           key={`score-${scorecard.participant_id}-${hole.hole_number}`}
-                          className={`border border-gray-200 px-2 py-2 text-center font-semibold ${getScoreColorClass(score, hole.hole_par)}`}
+                          className={`border border-gray-200 px-1 py-2 text-center font-semibold ${getScoreColorClass(score, hole.hole_par)}`}
                         >
                           {score > 0 ? score : '-'}
                         </td>
                       ))}
 
                       {/* In Total */}
-                      <td className="border border-gray-200 px-3 py-2 text-center font-bold bg-orange-50">
+                      <td className="border border-gray-200 px-3 py-2 text-center font-bold bg-gray-50">
                         {scorecard.in_total || '-'}
                       </td>
 

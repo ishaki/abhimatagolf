@@ -158,7 +158,8 @@ async def upload_participants(
 
         # Validate required columns
         required_columns = ['name']
-        optional_columns = ['declared_handicap', 'handicap', 'division', 'division_id']
+        optional_columns = ['declared_handicap', 'handicap', 'division', 'division_id', 
+                          'country', 'sex', 'phone_no', 'event_status', 'event_description']
 
         if 'name' not in df.columns:
             raise HTTPException(
@@ -177,6 +178,11 @@ async def upload_participants(
         df['declared_handicap'] = df.get('declared_handicap', 0).fillna(0)
         df['division'] = df.get('division', None).fillna('')
         df['division_id'] = df.get('division_id', None)
+        df['country'] = df.get('country', None).fillna('')
+        df['sex'] = df.get('sex', None).fillna('')
+        df['phone_no'] = df.get('phone_no', None).fillna('')
+        df['event_status'] = df.get('event_status', 'Ok').fillna('Ok')
+        df['event_description'] = df.get('event_description', None).fillna('')
         
         # Clean division_id values - convert empty strings to None
         df['division_id'] = df['division_id'].apply(lambda x: None if pd.isna(x) or str(x).strip() == '' else x)
@@ -189,7 +195,12 @@ async def upload_participants(
                     name=str(row['name']).strip(),
                     declared_handicap=float(row['declared_handicap']),
                     division=str(row['division']).strip() if row['division'] and str(row['division']).strip() else None,
-                    division_id=int(row['division_id']) if row['division_id'] is not None and not pd.isna(row['division_id']) else None
+                    division_id=int(row['division_id']) if row['division_id'] is not None and not pd.isna(row['division_id']) else None,
+                    country=str(row['country']).strip() if row['country'] and str(row['country']).strip() else None,
+                    sex=str(row['sex']).strip() if row['sex'] and str(row['sex']).strip() else None,
+                    phone_no=str(row['phone_no']).strip() if row['phone_no'] and str(row['phone_no']).strip() else None,
+                    event_status=str(row['event_status']).strip() if row['event_status'] and str(row['event_status']).strip() else 'Ok',
+                    event_description=str(row['event_description']).strip() if row['event_description'] and str(row['event_description']).strip() else None
                 )
                 participant_rows.append(participant_row)
             except Exception as e:

@@ -3,8 +3,10 @@ import { Button } from '@/components/ui/button';
 import EventList from '@/components/events/EventList';
 import EventForm from '@/components/events/EventForm';
 import { Event } from '@/services/eventService';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const EventsPage: React.FC = () => {
+  const { canCreateEvents } = usePermissions();
   const [showForm, setShowForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Event | undefined>(undefined);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -43,12 +45,14 @@ const EventsPage: React.FC = () => {
             <h1 className="text-lg font-bold text-gray-900">Event Management</h1>
             <p className="text-xs text-gray-600">Manage golf tournaments and events</p>
           </div>
-          <Button 
-            onClick={handleCreateEvent} 
-            className="bg-blue-500 hover:bg-blue-600 text-white"
-          >
-            Create Event
-          </Button>
+          {canCreateEvents() && (
+            <Button 
+              onClick={handleCreateEvent} 
+              className="bg-blue-500 hover:bg-blue-600 text-white"
+            >
+              Create Event
+            </Button>
+          )}
         </div>
       </div>
 

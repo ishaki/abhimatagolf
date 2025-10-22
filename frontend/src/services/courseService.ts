@@ -1,11 +1,33 @@
 import api from './api';
 
+export interface Teebox {
+  id: number;
+  course_id: number;
+  name: string;
+  course_rating: number;
+  slope_rating: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TeeboxCreate {
+  name: string;
+  course_rating: number;
+  slope_rating: number;
+}
+
+export interface TeeboxUpdate {
+  name?: string;
+  course_rating?: number;
+  slope_rating?: number;
+}
+
 export interface Hole {
   id: number;
   course_id: number;
   number: number;
   par: number;
-  handicap_index: number;
+  stroke_index: number;
   distance_meters?: number;
   created_at: string;
 }
@@ -18,6 +40,7 @@ export interface Course {
   created_at: string;
   updated_at: string;
   holes: Hole[];
+  teeboxes: Teebox[];
 }
 
 export interface CourseCreate {
@@ -36,7 +59,7 @@ export interface CourseUpdate {
 export interface HoleCreate {
   number: number;
   par: number;
-  handicap_index: number;
+  stroke_index: number;
   distance_meters?: number;
 }
 
@@ -88,4 +111,25 @@ export const getCourseHoles = async (courseId: number): Promise<Hole[]> => {
 export const updateCourseHoles = async (courseId: number, holes: HoleCreate[]): Promise<Hole[]> => {
   const response = await api.post(`/courses/${courseId}/holes/`, holes);
   return response.data;
+};
+
+// Teebox Management Functions
+
+export const getCourseTeeboxes = async (courseId: number): Promise<Teebox[]> => {
+  const response = await api.get(`/courses/${courseId}/teeboxes/`);
+  return response.data;
+};
+
+export const createTeebox = async (courseId: number, teeboxData: TeeboxCreate): Promise<Teebox> => {
+  const response = await api.post(`/courses/${courseId}/teeboxes/`, teeboxData);
+  return response.data;
+};
+
+export const updateTeebox = async (courseId: number, teeboxId: number, teeboxData: TeeboxUpdate): Promise<Teebox> => {
+  const response = await api.put(`/courses/${courseId}/teeboxes/${teeboxId}/`, teeboxData);
+  return response.data;
+};
+
+export const deleteTeebox = async (courseId: number, teeboxId: number): Promise<void> => {
+  await api.delete(`/courses/${courseId}/teeboxes/${teeboxId}/`);
 };

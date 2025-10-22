@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { getCourses, deleteCourse, Course } from '@/services/courseService';
 import { toast } from 'sonner';
+import { useConfirm } from '@/hooks/useConfirm';
 
 interface CourseListProps {
   onEditCourse: (course: Course) => void;
   onEditHoles?: (course: Course) => void;
+  onEditTeeboxes?: (course: Course) => void;
+  onViewDetails?: (course: Course) => void;
   onRefresh: () => void;
+  canManageCourses?: boolean;
 }
 
-const CourseList: React.FC<CourseListProps> = ({ onEditCourse, onEditHoles, onRefresh }) => {
+const CourseList: React.FC<CourseListProps> = ({ onEditCourse, onEditHoles, onEditTeeboxes, onViewDetails, onRefresh, canManageCourses = true }) => {
+  const { confirm } = useConfirm();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -36,7 +41,15 @@ const CourseList: React.FC<CourseListProps> = ({ onEditCourse, onEditHoles, onRe
   }, [page, search]);
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this course?')) {
+    const confirmed = await confirm({
+      title: 'Delete Course?',
+      description: 'Are you sure you want to delete this course? This action cannot be undone.',
+      variant: 'danger',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+    });
+
+    if (!confirmed) {
       return;
     }
 
@@ -120,26 +133,46 @@ const CourseList: React.FC<CourseListProps> = ({ onEditCourse, onEditHoles, onRe
                       </div>
                     </div>
                     <div className="flex gap-2 ml-4">
-                      <button
-                        onClick={() => onEditCourse(course)}
-                        className="px-4 py-2 border-2 border-blue-500 text-blue-600 rounded-lg hover:bg-blue-50 font-medium transition-colors"
-                      >
-                        Edit
-                      </button>
-                      {onEditHoles && (
+                      {onViewDetails && (
                         <button
-                          onClick={() => onEditHoles(course)}
-                          className="px-4 py-2 border-2 border-green-500 text-green-600 rounded-lg hover:bg-green-50 font-medium transition-colors"
+                          onClick={() => onViewDetails(course)}
+                          className="px-4 py-2 border-2 border-gray-500 text-gray-600 rounded-lg hover:bg-gray-50 font-medium transition-colors"
                         >
-                          Edit Holes
+                          View Details
                         </button>
                       )}
-                      <button
-                        onClick={() => handleDelete(course.id)}
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors"
-                      >
-                        Delete
-                      </button>
+                      {canManageCourses && (
+                        <>
+                          <button
+                            onClick={() => onEditCourse(course)}
+                            className="px-4 py-2 border-2 border-blue-500 text-blue-600 rounded-lg hover:bg-blue-50 font-medium transition-colors"
+                          >
+                            Edit
+                          </button>
+                          {onEditHoles && (
+                            <button
+                              onClick={() => onEditHoles(course)}
+                              className="px-4 py-2 border-2 border-green-500 text-green-600 rounded-lg hover:bg-green-50 font-medium transition-colors"
+                            >
+                              Edit Holes
+                            </button>
+                          )}
+                          {onEditTeeboxes && (
+                            <button
+                              onClick={() => onEditTeeboxes(course)}
+                              className="px-4 py-2 border-2 border-purple-500 text-purple-600 rounded-lg hover:bg-purple-50 font-medium transition-colors"
+                            >
+                              Edit Teeboxes
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDelete(course.id)}
+                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors"
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}

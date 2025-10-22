@@ -11,7 +11,17 @@
       "Bash(npm run build:*)",
       "Bash(npm install socket.io-client)",
       "Bash(npm install:*)",
-      "Bash(npm run dev)"
+      "Bash(npm run dev)",
+      "Bash(cat:*)",
+      "Bash(timeout 15 python:*)",
+      "Read(//e/zLab_Ishaki/**)",
+      "Bash(python scripts/test_log_security.py:*)",
+      "Bash(python scripts/test_log_retention.py:*)",
+      "Bash(python scripts/test_phase6_integration.py:*)",
+      "Bash(python migrate_add_teeboxes.py:*)",
+      "Bash(python -m py_compile:*)",
+      "Bash(python migrate_add_division_teebox.py:*)",
+      "Bash(python -c:*)"
     ],
     "deny": [],
     "ask": []

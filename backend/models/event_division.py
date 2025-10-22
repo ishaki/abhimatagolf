@@ -11,10 +11,12 @@ class EventDivision(SQLModel, table=True):
     handicap_min: Optional[float] = Field(default=None, description="Minimum handicap for this division")
     handicap_max: Optional[float] = Field(default=None, description="Maximum handicap for this division")
     max_participants: Optional[int] = Field(default=None, description="Maximum number of participants allowed")
+    teebox_id: Optional[int] = Field(default=None, foreign_key="teebox.id", description="Teebox assigned to this division")
     is_active: bool = Field(default=True, description="Whether this division is active")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
+
     # Relationships
     event: "Event" = Relationship(back_populates="divisions")
     participants: List["Participant"] = Relationship(back_populates="event_division")
+    teebox: Optional["Teebox"] = Relationship(back_populates="divisions")

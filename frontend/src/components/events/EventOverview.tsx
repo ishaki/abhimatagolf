@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Event, getParticipantStats } from '@/services/eventService';
 import { ParticipantStats } from '@/services/participantService';
 import EventForm from './EventForm';
-import ExcelExport from '@/components/excel/ExcelExport';
 
 interface EventOverviewProps {
   event: Event;
@@ -82,156 +81,141 @@ const EventOverview: React.FC<EventOverviewProps> = ({
   }
 
   return (
-    <div className="space-y-6 max-w-7xl">
-      {/* Event Information Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Event Information</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h3 className="text-sm font-medium text-gray-600 mb-1">Event Name</h3>
-              <p className="text-lg font-semibold text-gray-900">{event.name}</p>
-            </div>
+    <div className="space-y-8 max-w-7xl">
 
-            <div>
-              <h3 className="text-sm font-medium text-gray-600 mb-1">Status</h3>
-              <span
-                className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${
-                  event.is_active
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-gray-100 text-gray-800'
-                }`}
-              >
-                {event.is_active ? 'Active' : 'Inactive'}
-              </span>
-            </div>
-
-            <div>
-              <h3 className="text-sm font-medium text-gray-600 mb-1">Course</h3>
-              <p className="text-gray-900">{event.course_name || 'Unknown Course'}</p>
-            </div>
-
-            <div>
-              <h3 className="text-sm font-medium text-gray-600 mb-1">Event Date</h3>
-              <p className="text-gray-900">{formatDate(event.event_date)}</p>
-            </div>
-
-            <div>
-              <h3 className="text-sm font-medium text-gray-600 mb-1">Scoring Type</h3>
-              <p className="text-gray-900">{getScoringTypeLabel(event.scoring_type)}</p>
-            </div>
-
-            <div>
-              <h3 className="text-sm font-medium text-gray-600 mb-1">Created By</h3>
-              <p className="text-gray-900">{event.creator_name || 'Unknown'}</p>
-            </div>
-
-            {event.description && (
-              <div className="md:col-span-2">
-                <h3 className="text-sm font-medium text-gray-600 mb-1">Description</h3>
-                <p className="text-gray-900">{event.description}</p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-        <Card>
+      {/* Statistics Cards - Modern Design */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Total Participants Card */}
+        <Card className="shadow-sm hover:shadow-md transition-shadow border border-gray-200">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600">
               Total Participants
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-gray-900">
-              {loadingStats ? '...' : stats?.total_participants || 0}
+            <div className="flex items-center justify-between">
+              <div className="text-4xl font-bold text-gray-900">
+                {loadingStats ? (
+                  <div className="animate-pulse bg-gray-200 rounded-lg w-16 h-10"></div>
+                ) : (
+                  stats?.total_participants || 0
+                )}
+              </div>
+              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                </svg>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        {/* Average Handicap Card */}
+        <Card className="shadow-sm hover:shadow-md transition-shadow border border-gray-200">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600">
               Average Handicap
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-gray-900">
-              {loadingStats ? '...' : stats?.average_handicap?.toFixed(1) || 'N/A'}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600">Divisions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-gray-900">
-              {loadingStats
-                ? '...'
-                : stats?.by_division
-                ? Object.keys(stats.by_division).length
-                : 0}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Participants by Division - Inline with other stats */}
-        {stats && stats.by_division && Object.keys(stats.by_division).length > 0 && (
-          <Card className="xl:col-span-1">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Participants by Division
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {Object.entries(stats.by_division).slice(0, 3).map(([division, count]) => (
-                  <div
-                    key={division}
-                    className="flex justify-between items-center py-1"
-                  >
-                    <div className="text-sm text-gray-600 truncate">
-                      {division || 'No Division'}
-                    </div>
-                    <div className="text-lg font-bold text-gray-900">{count}</div>
-                  </div>
-                ))}
-                {Object.keys(stats.by_division).length > 3 && (
-                  <div className="text-xs text-gray-500 pt-1 border-t">
-                    +{Object.keys(stats.by_division).length - 3} more
-                  </div>
+            <div className="flex items-center justify-between">
+              <div className="text-4xl font-bold text-gray-900">
+                {loadingStats ? (
+                  <div className="animate-pulse bg-gray-200 rounded-lg w-16 h-10"></div>
+                ) : (
+                  stats?.average_handicap?.toFixed(1) || 'N/A'
                 )}
               </div>
-            </CardContent>
-          </Card>
-        )}
+              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                </svg>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Total Divisions Card */}
+        <Card className="shadow-sm hover:shadow-md transition-shadow border border-gray-200">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Total Divisions
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="text-4xl font-bold text-gray-900">
+                {loadingStats ? (
+                  <div className="animate-pulse bg-gray-200 rounded-lg w-16 h-10"></div>
+                ) : (
+                  stats?.by_division ? Object.keys(stats.by_division).length : 0
+                )}
+              </div>
+              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+                </svg>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Scoring Type Card */}
+        <Card className="shadow-sm hover:shadow-md transition-shadow border border-gray-200">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-gray-600">
+              Scoring Type
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="text-lg font-semibold text-gray-900">
+                {getScoringTypeLabel(event.scoring_type)}
+              </div>
+              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Excel Export Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Export Data</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600">
-              Export event data to Excel format for offline analysis and record keeping.
-            </p>
-            <ExcelExport
-              eventId={event.id}
-              hasParticipants={stats?.total_participants ? stats.total_participants > 0 : false}
-              hasScorecards={false} // TODO: Add scorecard detection logic
-            />
-          </div>
-        </CardContent>
-      </Card>
-
+      {/* Participants by Division - Full Width Card with 3-Column Layout */}
+      {stats && stats.by_division && Object.keys(stats.by_division).length > 0 && (
+        <Card className="shadow-sm border border-gray-200">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold text-gray-900">
+              Participants by Division
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Object.entries(stats.by_division).map(([division, count]) => (
+                <div
+                  key={division}
+                  className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg hover:border-gray-300 transition-colors duration-200"
+                >
+                  <div className="flex-1 min-w-0 mr-3">
+                    <div className="text-sm font-medium text-gray-900 truncate" title={division || 'No Division'}>
+                      {division || 'No Division'}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      {count === 1 ? '1 participant' : `${count} participants`}
+                    </div>
+                  </div>
+                  <div className="flex-shrink-0">
+                    <div className="inline-flex items-center justify-center w-10 h-10 bg-gray-100 rounded-lg">
+                      <span className="text-lg font-bold text-gray-900">{count}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

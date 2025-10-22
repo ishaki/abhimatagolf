@@ -32,3 +32,4 @@ class Event(SQLModel, table=True):
     user_events: List["UserEvent"] = Relationship(back_populates="event")
     scorecards: List["Scorecard"] = Relationship(back_populates="event")
     leaderboard_cache: List["LeaderboardCache"] = Relationship(back_populates="event")
+    winner_results: List["WinnerResult"] = Relationship(back_populates="event")

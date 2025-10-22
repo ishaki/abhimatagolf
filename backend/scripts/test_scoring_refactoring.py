@@ -192,7 +192,7 @@ class ScoringRefactoringTester:
         # Calculate expected handicap strokes
         strategy = ScoringStrategyFactory.get_strategy(ScoringType.NET_STROKE)
         expected_handicap_strokes = strategy.calculate_handicap_strokes_for_hole(
-            participant.declared_handicap, hole.handicap_index, 18
+            participant.declared_handicap, hole.stroke_index, 18
         )
         expected_net = float(scorecard.strokes - expected_handicap_strokes)
         expected_points = 0
@@ -202,7 +202,7 @@ class ScoringRefactoringTester:
 
         if scorecard.net_score == expected_net and scorecard.points == expected_points:
             print(f"  [PASS] Participant: {participant.name} (HCP {participant.declared_handicap})")
-            print(f"         Hole {hole.number} (Index {hole.handicap_index}): Strokes={scorecard.strokes}")
+            print(f"         Hole {hole.number} (Index {hole.stroke_index}): Strokes={scorecard.strokes}")
             print(f"         Handicap Strokes: {expected_handicap_strokes}")
             print(f"         Net Score: {scorecard.net_score} (expected {expected_net})")
             print(f"         Points: {scorecard.points} (expected {expected_points})")
@@ -251,7 +251,7 @@ class ScoringRefactoringTester:
         # Calculate expected values
         strategy = ScoringStrategyFactory.get_strategy(ScoringType.SYSTEM_36)
         expected_handicap_strokes = strategy.calculate_handicap_strokes_for_hole(
-            participant.declared_handicap, hole.handicap_index, 18
+            participant.declared_handicap, hole.stroke_index, 18
         )
         expected_points = strategy.calculate_system36_points(
             scorecard.strokes, hole.par, expected_handicap_strokes
@@ -263,7 +263,7 @@ class ScoringRefactoringTester:
 
         if scorecard.net_score == expected_net and scorecard.points == expected_points:
             print(f"  [PASS] Participant: {participant.name} (HCP {participant.declared_handicap})")
-            print(f"         Hole {hole.number} (Par {hole.par}, Index {hole.handicap_index}): Strokes={scorecard.strokes}")
+            print(f"         Hole {hole.number} (Par {hole.par}, Index {hole.stroke_index}): Strokes={scorecard.strokes}")
             print(f"         Handicap Strokes: {expected_handicap_strokes}")
             print(f"         Net Score: {scorecard.net_score} (expected {expected_net})")
             print(f"         Points: {scorecard.points} (expected {expected_points})")

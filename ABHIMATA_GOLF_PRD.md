@@ -14,11 +14,33 @@
 ---
 
 ## 3. Target Users
+
+### 3.1 User Roles
 | Role | Description | Permissions |
 |------|--------------|--------------|
 | **Super Admin** | Global admin who manages all users, events, and courses | Full access across system |
 | **Event Admin** | Organizes and manages specific tournaments | CRUD access for events, participants, and scoring |
 | **Event User** | Enters scores for assigned event(s) | Can record and view event scores only |
+
+### 3.2 Detailed Permission Matrix
+| Permission | Super Admin | Event Admin | Event User |
+|------------|-------------|-------------|------------|
+| Create/Edit Courses | ✓ | ✗ (View only) | ✗ |
+| Create Users Manually | ✓ | ✗ | ✗ |
+| Create Event Users | ✓ | ✓ | ✗ |
+| Access All Events | ✓ | ✓ (own events) | ✗ (assigned only) |
+| Manage Participants | ✓ | ✓ | ✓ (assigned event) |
+| Input Scorecards | ✓ | ✓ | ✓ (assigned event) |
+| View Live Scoring | ✓ | ✓ | ✓ (assigned event) |
+| Calculate Winners | ✓ | ✓ | ✗ |
+| View Winners Page | ✓ | ✓ | ✗ |
+
+### 3.3 Event-Specific User Creation
+- Event Admins can create users specifically for their events
+- These users are automatically assigned the EVENT_USER role
+- Auto-generated credentials (email and password) are provided
+- Users can only access the event they were created for
+- Credentials are displayed once and must be saved immediately
 
 ---
 
@@ -47,13 +69,32 @@
 - Unit for distance: **meters**
 
 ### 5.2 User Management
-- Super Admin can manage all users.
+- Super Admin can manage all users manually
+- Event Admins can create event-specific users
 - User fields:
   - Name
   - Email / Username
   - Password (hashed)
   - Role (Super Admin, Event Admin, Event User)
   - Status (Active / Inactive)
+
+#### 5.2.1 Event-Specific User Creation
+- **Access**: Event Admins and Super Admins can create event users
+- **Process**: 
+  - Click "Add Event User" button in Event Details Quick Actions
+  - Provide user's full name (required)
+  - Email auto-generated if not provided (format: `event{id}_{name}_{count}@abhimata.local`)
+  - Password auto-generated if not provided (12 characters, mixed case, numbers, symbols)
+  - User automatically assigned EVENT_USER role
+  - UserEvent relationship created with READ_WRITE access level
+- **Credentials Display**: 
+  - Generated credentials shown once after creation
+  - Copy-to-clipboard functionality provided
+  - Warning displayed: "Save these credentials - they won't be shown again"
+- **Access Control**: 
+  - Event users can only access their assigned event
+  - Can manage participants, input scorecards, view live scoring
+  - Cannot access Winners tab or other events
 
 ### 5.3 Event Management
 - Event Admin can create and configure tournaments.
@@ -64,7 +105,9 @@
   - Scoring Type (Stroke, Net Stroke, System 36, Stableford)
   - **Event Divisions** (Championship, Senior, Ladies, VIP – with handicap ranges and participant limits)
   - Participant List Upload (.xlsx or CSV)
-  - Each participant includes: Name, Declared Handicap, Division Assignment, and VIP flag.
+  - Each participant includes:
+    - **Required**: Name, Declared Handicap
+    - **Optional**: Division Assignment, Country, Sex (Male/Female), Phone Number, Event Status (Ok/No Show/Disqualified), Event Description
 
 ### 5.3.1 Event Division Management ✅ IMPLEMENTED
 - **Division Creation**: Create custom divisions with specific criteria
@@ -72,6 +115,7 @@
   - Division Name (e.g., Championship, Senior, Ladies)
   - Handicap Range (min/max handicap for division)
   - Maximum Participants per division
+  - **Teebox Assignment** (NEW - assigns specific teebox to division)
   - Division Description
 - **Division Management**:
   - Edit division settings
@@ -79,6 +123,32 @@
   - Bulk create multiple divisions
   - View division statistics and participant counts
 - **Integration**: Seamlessly integrated with Event Detail Page
+
+#### 5.3.2 Division-Teebox Integration ✅ IMPLEMENTED
+**Status**: ✅ IMPLEMENTED
+**Implemented**: October 22, 2025
+
+**Description**: Each event division can be assigned a specific teebox (e.g., Blue, White, Red) which determines the course rating and slope rating used for accurate handicap calculations.
+
+**Key Features**:
+- Divisions automatically assign teeboxes to all participants in that division
+- Teebox selector in Division Manager shows course rating and slope rating
+- Course handicap calculated using formula: `(Handicap Index × Slope Rating) / 113`
+- Winner calculations use teebox-based course handicap for accurate net scores
+- Participants inherit teebox from their division assignment
+
+**Implementation Details**:
+- **Database**: EventDivision.teebox_id (FK to Teebox)
+- **Models**:
+  - `backend/models/event_division.py`: Added teebox relationship
+  - `backend/models/course.py`: Teebox model with divisions relationship
+  - `backend/models/participant.py`: Added teebox and course_handicap properties
+- **API Endpoints**: GET divisions returns teebox data
+- **Frontend**: `EventDivisionManager.tsx` includes teebox selector with CR/SR display
+
+**Security Considerations**:
+- Authorization: Only Event Admin and Super Admin can assign teeboxes
+- Validation: Teebox must belong to event's course
 
 ### 5.4 Scoring Input
 - Hole-by-hole entry interface with bulk save (all 18 holes at once).
@@ -95,9 +165,11 @@
 | Type | Formula / Logic |
 |------|------------------|
 | **Stroke Play** | Total = Sum of strokes. Lowest total wins. |
-| **Net Stroke** | Net = Gross − Declared Handicap. Lowest Net wins. |
+| **Net Stroke** | Net = Gross − **Course Handicap**. Lowest Net wins. Course Handicap = (Handicap Index × Slope Rating) / 113 |
 | **System 36** | Assign points per hole: Birdie = 2, Par = 1, Bogey+ = 0. HCP = 36 − Total Points. Net = Gross − HCP. |
 | **Stableford** | Points: 0 (≥Double Bogey), 1 (Bogey), 2 (Par), 3 (Birdie), 4 (Eagle), 5 (Albatross). Highest total points wins. |
+
+**Note**: Course Handicap calculation uses the teebox assigned to participant's division. If no teebox assigned, falls back to declared handicap.
 
 **Tie-breaking Rule**: Countback method (last 9 holes → last 6 → last 3 → last hole).
 
@@ -241,7 +313,13 @@ erDiagram
         string name
         float declared_hcp
         string division
-        bool is_vip
+        int division_id
+        string country
+        enum sex
+        string phone_no
+        enum event_status
+        string event_description
+        datetime registered_at
     }
 
     SCORECARD {
@@ -273,13 +351,17 @@ erDiagram
 |-----------|---------|--------------|------|
 | `/auth/login` | POST | Login & return JWT | All |
 | `/users` | CRUD | Manage users | Super Admin |
+| `/users/event/{event_id}/create` | POST | Create event-specific user | Event Admin / Super Admin |
+| `/users/event/{event_id}` | GET | Get event users | Event Admin / Super Admin |
 | `/courses` | CRUD | Manage courses & holes | Super Admin |
 | `/events` | CRUD | Manage tournaments | Event Admin |
+| `/events/upcoming` | GET | Get upcoming events (filtered by user access) | All authenticated users |
 | `/events/{id}/participants` | POST / GET | Upload or list participants | Event Admin |
 | `/scorecards/bulk` | POST | Submit hole-by-hole scores (bulk save all 18 holes) | Event Admin / Event User |
 | `/live-score/{event_id}` | GET | View live score display (real-time, public) | Public |
 | `/winners/{event_id}/calculate` | POST | Calculate winner results with progress | Event Admin / Super Admin |
-| `/winners/{event_id}` | GET | View winner results | Event Admin / Super Admin |
+| `/winners/{event_id}` | GET | View winner results (public) | Public |
+| `/winners/{event_id}/admin` | GET | View winner results (admin) | Event Admin / Super Admin |
 | `/export/{event_id}` | GET | Export to Excel | Event Admin |
 
 ---
@@ -287,8 +369,13 @@ erDiagram
 ## 9. UI / UX Overview
 
 **Admin Dashboard**
-- Manage Courses, Events, Users
-- Event Setup Wizard
+- Quick Actions sidebar with Create Event, Add Course, Manage Users buttons
+- Upcoming Events list showing:
+  - Event name, date, location (course name)
+  - Scoring type and participant count
+  - Click to navigate to event details
+  - Responsive design (table on desktop, cards on mobile)
+- Role-based access control for all dashboard elements
 
 **Score Entry Page**
 - Hole-by-hole grid layout (18 holes)

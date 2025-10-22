@@ -4,7 +4,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { eventDivisionService, EventDivision, EventDivisionCreate } from '@/services/eventDivisionService';
+import { getCourseTeeboxes, Teebox } from '@/services/courseService';
+import { getEvent } from '@/services/eventService';
 import { toast } from 'sonner';
+import { useConfirm } from '@/hooks/useConfirm';
 
 interface EventDivisionManagerProps {
   eventId: number;
@@ -15,21 +18,43 @@ const EventDivisionManager: React.FC<EventDivisionManagerProps> = ({
   eventId,
   onDivisionsChange,
 }) => {
+  const { confirm } = useConfirm();
   const [divisions, setDivisions] = useState<EventDivision[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingDivision, setEditingDivision] = useState<EventDivision | null>(null);
+  const [teeboxes, setTeeboxes] = useState<Teebox[]>([]);
+  const [loadingTeeboxes, setLoadingTeeboxes] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     handicap_min: '',
     handicap_max: '',
     max_participants: '',
+    teebox_id: '',
   });
 
   useEffect(() => {
     loadDivisions();
+    loadEventCourseAndTeeboxes();
   }, [eventId]);
+
+  const loadEventCourseAndTeeboxes = async () => {
+    try {
+      setLoadingTeeboxes(true);
+      // Get event to find course_id
+      const event = await getEvent(eventId);
+
+      // Load teeboxes for the course
+      const teeboxData = await getCourseTeeboxes(event.course_id);
+      setTeeboxes(teeboxData);
+    } catch (error) {
+      console.error('Error loading teeboxes:', error);
+      toast.error('Failed to load teeboxes');
+    } finally {
+      setLoadingTeeboxes(false);
+    }
+  };
 
   const loadDivisions = async () => {
     try {
@@ -55,6 +80,7 @@ const EventDivisionManager: React.FC<EventDivisionManagerProps> = ({
       handicap_min: '',
       handicap_max: '',
       max_participants: '',
+      teebox_id: '',
     });
     setEditingDivision(null);
     setShowForm(false);
@@ -76,6 +102,7 @@ const EventDivisionManager: React.FC<EventDivisionManagerProps> = ({
         handicap_min: formData.handicap_min ? parseFloat(formData.handicap_min) : undefined,
         handicap_max: formData.handicap_max ? parseFloat(formData.handicap_max) : undefined,
         max_participants: formData.max_participants ? parseInt(formData.max_participants) : undefined,
+        teebox_id: formData.teebox_id ? parseInt(formData.teebox_id) : undefined,
       };
 
       if (editingDivision) {
@@ -103,13 +130,22 @@ const EventDivisionManager: React.FC<EventDivisionManagerProps> = ({
       handicap_min: division.handicap_min?.toString() || '',
       handicap_max: division.handicap_max?.toString() || '',
       max_participants: division.max_participants?.toString() || '',
+      teebox_id: division.teebox_id?.toString() || '',
     });
     setEditingDivision(division);
     setShowForm(true);
   };
 
   const handleDelete = async (divisionId: number, divisionName: string) => {
-    if (window.confirm(`Are you sure you want to delete the division "${divisionName}"?`)) {
+    const confirmed = await confirm({
+      title: `Delete Division "${divisionName}"?`,
+      description: `Are you sure you want to delete the division "${divisionName}"? This action cannot be undone.`,
+      variant: 'danger',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+    });
+
+    if (confirmed) {
       try {
         await eventDivisionService.deleteDivision(divisionId);
         toast.success('Division deleted successfully');
@@ -125,10 +161,11 @@ const EventDivisionManager: React.FC<EventDivisionManagerProps> = ({
 
   const createDefaultDivisions = async () => {
     const defaultDivisions = [
-      { name: 'Championship', description: 'Low handicap players', handicap_max: 9 },
-      { name: 'A Flight', description: 'Mid handicap players', handicap_min: 10, handicap_max: 18 },
-      { name: 'B Flight', description: 'Higher handicap players', handicap_min: 19, handicap_max: 27 },
-      { name: 'C Flight', description: 'Highest handicap players', handicap_min: 28 },
+      { name: 'A Flight', description: 'Men Low handicap players', handicap_min: 1, handicap_max: 12 },
+      { name: 'B Flight', description: 'Men Higher handicap players', handicap_min: 13, handicap_max: 18 },
+      { name: 'C Flight', description: 'Men Highest handicap players', handicap_min: 19, handicap_max: 27 },
+      { name: 'Senior Flight', description: 'Senior players'},
+      { name: 'Ladies Flight', description: 'Ladies players'},
     ];
 
     try {
@@ -249,6 +286,26 @@ const EventDivisionManager: React.FC<EventDivisionManagerProps> = ({
                     placeholder="No limit"
                   />
                 </div>
+                <div>
+                  <Label htmlFor="teebox_id">Teebox</Label>
+                  <select
+                    id="teebox_id"
+                    value={formData.teebox_id}
+                    onChange={(e) => handleInputChange('teebox_id', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    disabled={loadingTeeboxes || teeboxes.length === 0}
+                  >
+                    <option value="">No Teebox</option>
+                    {teeboxes.map((teebox) => (
+                      <option key={teebox.id} value={teebox.id}>
+                        {teebox.name} (CR: {teebox.course_rating}, SR: {teebox.slope_rating})
+                      </option>
+                    ))}
+                  </select>
+                  {teeboxes.length === 0 && !loadingTeeboxes && (
+                    <p className="text-xs text-gray-500 mt-1">No teeboxes available for this course</p>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-2">
@@ -333,6 +390,14 @@ const EventDivisionManager: React.FC<EventDivisionManagerProps> = ({
                     {division.max_participants && ` / ${division.max_participants}`}
                   </span>
                 </div>
+                {division.teebox && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Teebox:</span>
+                    <span className="font-medium">
+                      {division.teebox.name} (CR: {division.teebox.course_rating}, SR: {division.teebox.slope_rating})
+                    </span>
+                  </div>
+                )}
                 {division.max_participants && (
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div

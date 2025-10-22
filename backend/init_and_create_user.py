@@ -58,7 +58,7 @@ def create_test_user():
                 full_name="Event Admin",
                 email="eventadmin@abhimatagolf.com",
                 hashed_password=get_password_hash("event123"),
-                role=UserRole.SUPER_ADMIN,
+                role=UserRole.EVENT_ADMIN,
                 is_active=True
             )
             session.add(test_user)

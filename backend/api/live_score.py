@@ -29,6 +29,10 @@ async def get_live_score(
         description="Sort method: 'gross' or 'net' (Phase 3: both use gross)",
         regex="^(gross|net)$"
     ),
+    filter_empty: bool = Query(
+        False,
+        description="If True, exclude participants with no hole scores entered"
+    ),
     service: LiveScoreService = Depends(get_live_score_service),
 ):
     """
@@ -40,6 +44,10 @@ async def get_live_score(
     - All participants with raw scorecard data
     - Hole-by-hole strokes (no calculations)
     - Sorted by: holes completed → gross score → zeros last
+
+    **Parameters**:
+    - `sort_by`: Sort method - "gross" or "net" (Phase 3: both use gross)
+    - `filter_empty`: If True, exclude participants with no hole scores entered
 
     **Phase 3 Note**:
     - `sort_by` parameter accepts "gross" or "net", but both currently sort by gross
@@ -53,4 +61,4 @@ async def get_live_score(
     - Spectator web views
     - Mobile apps
     """
-    return service.get_live_score(event_id=event_id, sort_by=sort_by)
+    return service.get_live_score(event_id=event_id, sort_by=sort_by, filter_empty=filter_empty)

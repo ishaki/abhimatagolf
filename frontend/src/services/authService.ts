@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { handleAuthError } from '@/utils/authErrorHandler';
 
 const API_BASE_URL = 'http://localhost:8000/api/v1';
 
@@ -28,9 +29,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      handleAuthError();
     }
     return Promise.reject(error);
   }

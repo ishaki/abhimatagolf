@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
+from typing import Optional
 from datetime import datetime
 from core.database import get_session
 from core.security import get_current_user
@@ -79,16 +80,18 @@ async def export_scorecards_to_excel(
 
 @router.get("/template/participants")
 async def download_participant_template(
+    event_id: Optional[int] = Query(None, description="Event ID to include division list in template"),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
     """
     Download Excel template for participant upload.
+    Optionally provide event_id to include event divisions reference.
     Requires authentication.
     """
     try:
         excel_service = ExcelService(session)
-        excel_file = excel_service.generate_participant_template()
+        excel_file = excel_service.generate_participant_template(event_id=event_id)
         
         # Generate filename
         filename = f"participant_upload_template_{datetime.now().strftime('%Y%m%d')}.xlsx"

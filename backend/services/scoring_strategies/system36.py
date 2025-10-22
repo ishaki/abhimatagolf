@@ -92,7 +92,7 @@ class System36ScoringStrategy(ScoringStrategy):
         # Calculate handicap strokes for this specific hole
         handicap_strokes = self.calculate_handicap_strokes_for_hole(
             declared_handicap=participant.declared_handicap,
-            hole_index=hole.handicap_index,
+            hole_index=hole.stroke_index,
             num_holes=18
         )
 
@@ -111,7 +111,7 @@ class System36ScoringStrategy(ScoringStrategy):
 
         logger.debug(
             f"System 36: Participant {participant.id} (HCP {participant.declared_handicap}), "
-            f"Hole {hole.number} (Par {hole.par}, Index {hole.handicap_index}), "
+            f"Hole {hole.number} (Par {hole.par}, Index {hole.stroke_index}), "
             f"Gross {scorecard.strokes}, Handicap Strokes {handicap_strokes}, "
             f"Net {scorecard.net_score}, Points {points}"
         )

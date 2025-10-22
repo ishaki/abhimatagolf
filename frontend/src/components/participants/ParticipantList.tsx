@@ -8,7 +8,10 @@ import {
   getParticipants,
   deleteParticipant,
 } from '@/services/participantService';
+import { eventDivisionService, EventDivision } from '@/services/eventDivisionService';
 import { toast } from 'sonner';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useConfirm } from '@/hooks/useConfirm';
 
 interface ParticipantListProps {
   eventId?: number;
@@ -21,6 +24,8 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
   onEditParticipant,
   onRefresh,
 }) => {
+  const { canManageParticipants } = usePermissions();
+  const { confirm } = useConfirm();
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<ParticipantFilters>({
@@ -33,11 +38,37 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
   const [isSearching, setIsSearching] = useState(false);
   const [total, setTotal] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
+  const [divisions, setDivisions] = useState<EventDivision[]>([]);
+  const [loadingDivisions, setLoadingDivisions] = useState(false);
 
   // Initialize search term from filters
   useEffect(() => {
     setSearchTerm(filters.search || '');
   }, []);
+
+  // Load divisions when eventId changes
+  useEffect(() => {
+    if (eventId) {
+      loadDivisions();
+    } else {
+      setDivisions([]);
+    }
+  }, [eventId]);
+
+  const loadDivisions = async () => {
+    if (!eventId) return;
+    
+    try {
+      setLoadingDivisions(true);
+      const eventDivisions = await eventDivisionService.getDivisionsForEvent(eventId);
+      setDivisions(eventDivisions);
+    } catch (error) {
+      console.error('Error loading divisions:', error);
+      toast.error('Failed to load divisions');
+    } finally {
+      setLoadingDivisions(false);
+    }
+  };
 
   const loadParticipants = async () => {
     try {
@@ -71,14 +102,19 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
   // Load participants when filters change (excluding search term)
   useEffect(() => {
     loadParticipants();
-  }, [filters.page, filters.per_page, filters.event_id, filters.search]);
+  }, [filters.page, filters.per_page, filters.event_id, filters.search, filters.division]);
 
   const handleSearch = (value: string) => {
     setSearchTerm(value);
   };
 
   const handleFilterChange = (key: keyof ParticipantFilters, value: any) => {
-    setFilters((prev) => ({ ...prev, [key]: value, page: 1 }));
+    // Handle special case for empty division filter
+    if (key === 'division' && value === '__empty__') {
+      setFilters((prev) => ({ ...prev, [key]: '__empty__', page: 1 }));
+    } else {
+      setFilters((prev) => ({ ...prev, [key]: value, page: 1 }));
+    }
   };
 
   const handlePageChange = (page: number) => {
@@ -86,11 +122,15 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
   };
 
   const handleDelete = async (participantId: number, participantName: string) => {
-    if (
-      window.confirm(
-        `Are you sure you want to delete ${participantName}? This will also delete all their scores.`
-      )
-    ) {
+    const confirmed = await confirm({
+      title: `Delete ${participantName}?`,
+      description: `Are you sure you want to delete ${participantName}? This will also delete all their scores.`,
+      variant: 'danger',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+    });
+
+    if (confirmed) {
       try {
         await deleteParticipant(participantId);
         toast.success('Participant deleted successfully');
@@ -138,6 +178,25 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
 
           {/* Filter Dropdowns */}
           <div className="flex flex-wrap gap-3">
+            {/* Division Filter */}
+            <select
+              className="px-3 py-2 h-10 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[120px]"
+              value={filters.division || ''}
+              onChange={(e) =>
+                handleFilterChange('division', e.target.value || undefined)
+              }
+              disabled={loadingDivisions}
+            >
+              <option value="">All Divisions</option>
+              <option value="__empty__">NONE</option>
+              {divisions.map((division) => (
+                <option key={division.id} value={division.name}>
+                  {division.name}
+                </option>
+              ))}
+            </select>
+
+            {/* Records per page */}
             <select
               className="px-3 py-2 h-10 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[100px]"
               value={filters.per_page || 20}
@@ -175,10 +234,19 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
                     Division
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
+                    Country
                   </th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Scores
+                    Sex
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Event Status
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Event Description
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Scorecards
                   </th>
                   <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -209,33 +277,50 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
                       {participant.division || '-'}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                      {participant.scorecard_count || 0}
+                      {participant.country || '-'}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                      {/* Scores column - could show total score or score status */}
-                      {participant.total_gross_score ? `${participant.total_gross_score}` : '-'}
+                      {participant.sex || '-'}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                        participant.event_status === 'Ok' ? 'bg-green-100 text-green-800' :
+                        participant.event_status === 'No Show' ? 'bg-yellow-100 text-yellow-800' :
+                        participant.event_status === 'Disqualified' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {participant.event_status || 'Ok'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-900 max-w-xs truncate" title={participant.event_description || ''}>
+                      {participant.event_description || '-'}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                      {participant.scorecard_count || 0}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex items-center justify-end space-x-1">
-                        <Button
-                          onClick={() => onEditParticipant(participant)}
-                          size="sm"
-                          variant="outline"
-                          className="text-xs px-2 py-1 h-7"
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          onClick={() =>
-                            handleDelete(participant.id, participant.name)
-                          }
-                          size="sm"
-                          variant="outline"
-                          className="text-xs px-2 py-1 h-7 border-red-300 text-red-600 hover:bg-red-50"
-                        >
-                          Delete
-                        </Button>
-                      </div>
+                      {canManageParticipants(eventId) && (
+                        <div className="flex items-center justify-end space-x-1">
+                          <Button
+                            onClick={() => onEditParticipant(participant)}
+                            size="sm"
+                            variant="outline"
+                            className="text-xs px-2 py-1 h-7"
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            onClick={() =>
+                              handleDelete(participant.id, participant.name)
+                            }
+                            size="sm"
+                            variant="outline"
+                            className="text-xs px-2 py-1 h-7 border-red-300 text-red-600 hover:bg-red-50"
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

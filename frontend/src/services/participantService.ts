@@ -13,6 +13,12 @@ export interface Participant {
   total_gross_score?: number;
   total_net_score?: number;
   total_points?: number;
+  // Additional participant information
+  country?: string;
+  sex?: 'Male' | 'Female';
+  phone_no?: string;
+  event_status?: 'Ok' | 'No Show' | 'Disqualified';
+  event_description?: string;
 }
 
 export interface ParticipantCreate {
@@ -21,6 +27,11 @@ export interface ParticipantCreate {
   declared_handicap?: number;
   division?: string;
   division_id?: number;
+  country?: string;
+  sex?: 'Male' | 'Female';
+  phone_no?: string;
+  event_status?: 'Ok' | 'No Show' | 'Disqualified';
+  event_description?: string;
 }
 
 export interface ParticipantUpdate {
@@ -28,6 +39,11 @@ export interface ParticipantUpdate {
   declared_handicap?: number;
   division?: string;
   division_id?: number;
+  country?: string;
+  sex?: 'Male' | 'Female';
+  phone_no?: string;
+  event_status?: 'Ok' | 'No Show' | 'Disqualified';
+  event_description?: string;
 }
 
 export interface ParticipantListResponse {
@@ -53,6 +69,11 @@ export interface ParticipantBulkCreate {
     declared_handicap?: number;
     division?: string;
     division_id?: number;
+    country?: string;
+    sex?: 'Male' | 'Female';
+    phone_no?: string;
+    event_status?: 'Ok' | 'No Show' | 'Disqualified';
+    event_description?: string;
   }>;
 }
 

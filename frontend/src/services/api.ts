@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { handleAuthError } from '@/utils/authErrorHandler'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
@@ -51,10 +52,8 @@ api.interceptors.response.use(
           return api(originalRequest)
         }
       } catch (refreshError) {
-        // Refresh failed, redirect to login
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('refresh_token')
-        window.location.href = '/login'
+        // Refresh failed, use centralized error handler
+        handleAuthError()
         return Promise.reject(refreshError)
       }
     }

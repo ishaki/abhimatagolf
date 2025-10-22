@@ -1,13 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import UserList from '@/components/users/UserList';
 import UserForm from '@/components/users/UserForm';
 import { User } from '@/services/userService';
+import { usePermissions } from '@/hooks/usePermissions';
+import { toast } from 'sonner';
 
 const UsersPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { canManageUsers } = usePermissions();
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<User | undefined>(undefined);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Check permissions on component mount
+  useEffect(() => {
+    if (!canManageUsers()) {
+      toast.error('You do not have permission to access this page');
+      navigate('/dashboard');
+    }
+  }, [canManageUsers, navigate]);
 
   const handleCreateUser = () => {
     setEditingUser(undefined);
@@ -33,6 +46,11 @@ const UsersPage: React.FC = () => {
   const handleRefresh = () => {
     setRefreshKey(prev => prev + 1);
   };
+
+  // Don't render anything if user doesn't have permissions
+  if (!canManageUsers()) {
+    return null;
+  }
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-gray-50 flex flex-col">

@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
+from schemas.course import TeeboxResponse
 
 
 class EventDivisionBase(BaseModel):
@@ -9,6 +10,7 @@ class EventDivisionBase(BaseModel):
     handicap_min: Optional[float] = Field(default=None, description="Minimum handicap for this division")
     handicap_max: Optional[float] = Field(default=None, description="Maximum handicap for this division")
     max_participants: Optional[int] = Field(default=None, description="Maximum number of participants allowed")
+    teebox_id: Optional[int] = Field(default=None, description="Teebox assigned to this division")
     is_active: bool = Field(default=True, description="Whether this division is active")
 
 
@@ -22,6 +24,7 @@ class EventDivisionUpdate(BaseModel):
     handicap_min: Optional[float] = Field(default=None)
     handicap_max: Optional[float] = Field(default=None)
     max_participants: Optional[int] = Field(default=None)
+    teebox_id: Optional[int] = Field(default=None)
     is_active: Optional[bool] = Field(default=None)
 
 
@@ -31,6 +34,7 @@ class EventDivisionResponse(EventDivisionBase):
     created_at: datetime
     updated_at: datetime
     participant_count: Optional[int] = Field(default=None, description="Number of participants in this division")
+    teebox: Optional[TeeboxResponse] = Field(default=None, description="Teebox information for this division")
 
     class Config:
         from_attributes = True

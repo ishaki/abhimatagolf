@@ -8,6 +8,7 @@ import {
   type ScorecardResponse,
   type HoleScore,
 } from '@/services/scorecardService';
+import { useConfirm } from '@/hooks/useConfirm';
 
 interface ScorecardGridProps {
   participantId: number;
@@ -19,6 +20,7 @@ const ScorecardGrid: React.FC<ScorecardGridProps> = ({
   participantId,
   onScoreUpdate,
 }) => {
+  const { confirm } = useConfirm();
   const [scorecard, setScorecard] = useState<ScorecardResponse | null>(null);
   const [scores, setScores] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(false);
@@ -107,8 +109,16 @@ const ScorecardGrid: React.FC<ScorecardGridProps> = ({
     }
   };
 
-  const handleReset = () => {
-    if (confirm('Are you sure you want to reset all unsaved changes?')) {
+  const handleReset = async () => {
+    const confirmed = await confirm({
+      title: 'Reset Changes?',
+      description: 'Are you sure you want to reset all unsaved changes? This will discard any modifications you have made.',
+      variant: 'warning',
+      confirmText: 'Reset',
+      cancelText: 'Cancel',
+    });
+
+    if (confirmed) {
       loadScorecard();
     }
   };

@@ -44,6 +44,11 @@ class ExcelService:
                     'Handicap': participant.declared_handicap,
                     'Division': division.name if division else participant.division or 'N/A',
                     'Division ID': participant.division_id or '',
+                    'Country': participant.country or '',
+                    'Sex': participant.sex or '',
+                    'Phone No': participant.phone_no or '',
+                    'Event Status': participant.event_status or 'Ok',
+                    'Event Description': participant.event_description or '',
                     'Registered At': participant.registered_at.strftime('%Y-%m-%d %H:%M') if participant.registered_at else '',
                 })
 
@@ -171,32 +176,55 @@ class ExcelService:
             logger.error(f"Error exporting scorecards to Excel: {str(e)}")
             raise
 
-    def generate_participant_template(self) -> BytesIO:
+    def generate_participant_template(self, event_id: Optional[int] = None) -> BytesIO:
         """Generate Excel template for participant upload."""
         try:
-            # Create template data
+            # Create template data with all fields
             template_data = [
                 {
                     'name': 'John Doe',
                     'declared_handicap': 12,
                     'division': 'Championship',
-                    'division_id': 1
+                    'division_id': 1,
+                    'country': 'United States',
+                    'sex': 'Male',
+                    'phone_no': '+1234567890',
+                    'event_status': 'Ok',
+                    'event_description': 'Regular participant'
                 },
                 {
                     'name': 'Jane Smith',
                     'declared_handicap': 8,
                     'division': 'Ladies',
-                    'division_id': 2
+                    'division_id': 2,
+                    'country': 'United Kingdom',
+                    'sex': 'Female',
+                    'phone_no': '+44123456789',
+                    'event_status': 'Ok',
+                    'event_description': ''
                 },
                 {
                     'name': 'Bob Johnson',
                     'declared_handicap': 18,
                     'division': 'Senior',
-                    'division_id': 3
+                    'division_id': 3,
+                    'country': 'Canada',
+                    'sex': 'Male',
+                    'phone_no': '+1987654321',
+                    'event_status': 'Ok',
+                    'event_description': ''
                 }
             ]
 
             df = pd.DataFrame(template_data)
+
+            # Get event divisions if event_id is provided
+            divisions_list = []
+            if event_id:
+                divisions = self.session.exec(
+                    select(EventDivision).where(EventDivision.event_id == event_id)
+                ).all()
+                divisions_list = [(div.id, div.name, div.min_handicap, div.max_handicap) for div in divisions]
 
             # Create Excel file in memory
             output = BytesIO()
@@ -214,6 +242,10 @@ class ExcelService:
                 
                 # Add instructions sheet
                 self._add_instructions_sheet(workbook)
+                
+                # Add divisions reference sheet if divisions exist
+                if divisions_list:
+                    self._add_divisions_sheet(workbook, divisions_list)
 
             output.seek(0)
             logger.info("Successfully generated participant template")
@@ -313,7 +345,7 @@ class ExcelService:
 
         # Add title
         worksheet.insert_rows(1)
-        worksheet.merge_cells('A1:D1')
+        worksheet.merge_cells('A1:I1')
         title_cell = worksheet['A1']
         title_cell.value = "Participant Upload Template"
         title_cell.font = Font(bold=True, size=16)
@@ -391,26 +423,38 @@ class ExcelService:
             "",
             "Required Columns:",
             "• name: Participant's full name (required)",
-            "• declared_handicap: Golf handicap (0-54, optional, default: 0)",
+            "",
+            "Optional Columns:",
+            "• declared_handicap: Golf handicap (0-54, default: 0)",
             "• division: Division name (optional)",
-            "• division_id: Division ID from event divisions (optional)",
+            "• division_id: Division ID from event divisions (optional, see Divisions sheet)",
+            "• country: Country name (optional)",
+            "• sex: Male or Female (optional)",
+            "• phone_no: Phone number with country code (optional, e.g., +1234567890)",
+            "• event_status: Ok (default), No Show, or Disqualified",
+            "• event_description: Additional notes about participant (optional)",
             "",
             "Instructions:",
             "1. Fill in participant information in the 'Participants' sheet",
             "2. Remove example rows before uploading",
             "3. Ensure names are unique within the event",
             "4. Handicap values must be between 0 and 54",
-            "5. Division ID must reference an existing event division",
+            "5. Division ID must reference an existing event division (see Divisions sheet)",
+            "6. Sex must be exactly 'Male' or 'Female'",
+            "7. Event status must be 'Ok', 'No Show', or 'Disqualified'",
+            "8. Phone numbers can contain numbers, +, spaces, hyphens, and parentheses",
             "",
             "File Format:",
-            "• Save as Excel (.xlsx) format",
+            "• Save as Excel (.xlsx) or CSV (.csv) format",
             "• Do not modify column headers",
-            "• Do not add extra columns",
+            "• Leave optional fields empty if not needed",
             "",
             "Validation:",
             "• Names cannot be empty",
-            "• Handicaps must be numeric",
+            "• Handicaps must be numeric (0-54)",
             "• Division IDs must be valid integers",
+            "• Sex must be Male or Female (case-sensitive)",
+            "• Event status must be Ok, No Show, or Disqualified",
             "",
             "For support, contact the tournament administrator."
         ]
@@ -424,3 +468,43 @@ class ExcelService:
         
         # Auto-adjust column width
         ws.column_dimensions['A'].width = 80
+    
+    def _add_divisions_sheet(self, workbook, divisions: List):
+        """Add divisions reference sheet to template."""
+        ws = workbook.create_sheet("Divisions")
+        
+        # Add header
+        headers = ["Division ID", "Division Name", "Min Handicap", "Max Handicap"]
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center")
+        
+        # Add divisions data
+        for row_idx, (div_id, div_name, min_hcp, max_hcp) in enumerate(divisions, 2):
+            ws.cell(row=row_idx, column=1, value=div_id)
+            ws.cell(row=row_idx, column=2, value=div_name)
+            ws.cell(row=row_idx, column=3, value=min_hcp if min_hcp is not None else 'N/A')
+            ws.cell(row=row_idx, column=4, value=max_hcp if max_hcp is not None else 'N/A')
+        
+        # Auto-adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        # Add title
+        ws.insert_rows(1)
+        ws.merge_cells('A1:D1')
+        title_cell = ws['A1']
+        title_cell.value = "Event Divisions Reference"
+        title_cell.font = Font(bold=True, size=14)
+        title_cell.alignment = Alignment(horizontal="center")

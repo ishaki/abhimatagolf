@@ -19,7 +19,7 @@ const HoleEditor: React.FC<HoleEditorProps> = ({ courseId, holes, onSave, onCanc
       setHoleData(holes.map(hole => ({
         number: hole.number,
         par: hole.par,
-        handicap_index: hole.handicap_index,
+        stroke_index: hole.stroke_index,
         distance_meters: hole.distance_meters,
       })));
     } else {
@@ -29,7 +29,7 @@ const HoleEditor: React.FC<HoleEditorProps> = ({ courseId, holes, onSave, onCanc
         defaultHoles.push({
           number: i,
           par: i <= 4 ? 4 : i <= 10 ? 3 : 5, // Mix of par 3, 4, 5
-          handicap_index: i,
+          stroke_index: i,
           distance_meters: undefined,
         });
       }
@@ -143,11 +143,11 @@ const HoleEditor: React.FC<HoleEditorProps> = ({ courseId, holes, onSave, onCanc
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Handicap Index</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">Stroke Index</label>
                     <input
                       type="number"
-                      value={hole.handicap_index}
-                      onChange={(e) => handleHoleChange(index, 'handicap_index', parseInt(e.target.value) || 1)}
+                      value={hole.stroke_index}
+                      onChange={(e) => handleHoleChange(index, 'stroke_index', parseInt(e.target.value) || 1)}
                       min="1"
                       max="18"
                       className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"

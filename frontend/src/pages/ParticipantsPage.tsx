@@ -4,11 +4,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import ParticipantList from '@/components/participants/ParticipantList';
 import ParticipantForm from '@/components/participants/ParticipantForm';
 import ParticipantUpload from '@/components/participants/ParticipantUpload';
-import { Participant } from '@/services/participantService';
+import { Participant, getEventParticipants } from '@/services/participantService';
 import { Event, getEvents } from '@/services/eventService';
+import { eventDivisionService } from '@/services/eventDivisionService';
+import { autoAssignDivisions } from '@/services/divisionAutoAssignService';
 import { toast } from 'sonner';
+import { Wand2 } from 'lucide-react';
+import { useConfirm } from '@/hooks/useConfirm';
 
 const ParticipantsPage: React.FC = () => {
+  const { confirm } = useConfirm();
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<number | undefined>(undefined);
   const [selectedEvent, setSelectedEvent] = useState<Event | undefined>(undefined);
@@ -63,6 +68,65 @@ const ParticipantsPage: React.FC = () => {
       return;
     }
     setViewMode('upload');
+  };
+
+  const handleAutoAssignDivisions = async () => {
+    if (!selectedEventId) {
+      toast.error('Please select an event first');
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: 'Auto-Assign Divisions?',
+      description: 'This will ONLY assign divisions to participants who have NO division currently assigned.\n\n✓ Participants WITH divisions will be SKIPPED (not changed)\n✓ Assignments based on: Handicap, Sex, and Name',
+      variant: 'warning',
+      confirmText: 'Continue',
+      cancelText: 'Cancel',
+    });
+
+    if (!confirmed) return;
+
+    try {
+      toast.loading('Auto-assigning divisions...', { id: 'auto-assign' });
+
+      // Fetch participants and divisions
+      const participants = await getEventParticipants(selectedEventId);
+      const divisions = await eventDivisionService.getDivisionsForEvent(selectedEventId);
+
+      // Run auto-assignment
+      const result = await autoAssignDivisions(participants, divisions);
+
+      // Show result
+      toast.dismiss('auto-assign');
+
+      if (result.assigned > 0) {
+        toast.success(
+          `Successfully assigned ${result.assigned} participant(s) to divisions. ${result.skipped} skipped.`,
+          { duration: 5000 }
+        );
+        
+        // Refresh the participant list
+        handleRefresh();
+      } else {
+        toast.warning(
+          `No participants were assigned. ${result.skipped} skipped.`,
+          { duration: 5000 }
+        );
+      }
+
+      // Show errors if any
+      if (result.errors.length > 0 && result.errors.length <= 5) {
+        result.errors.forEach((error) => {
+          toast.error(`${error.participantName}: ${error.reason}`, { duration: 4000 });
+        });
+      } else if (result.errors.length > 5) {
+        toast.error(`${result.errors.length} participants could not be assigned`, { duration: 4000 });
+      }
+    } catch (error: any) {
+      toast.dismiss('auto-assign');
+      console.error('Error auto-assigning divisions:', error);
+      toast.error('Failed to auto-assign divisions');
+    }
   };
 
   const handleEditParticipant = (participant: Participant) => {
@@ -232,6 +296,14 @@ const ParticipantsPage: React.FC = () => {
                       className="border-blue-300 text-blue-600 hover:bg-blue-50"
                     >
                       Add Participant
+                    </Button>
+                    <Button
+                      onClick={handleAutoAssignDivisions}
+                      variant="outline"
+                      className="border-purple-300 text-purple-600 hover:bg-purple-50 flex items-center gap-1"
+                    >
+                      <Wand2 className="w-4 h-4" />
+                      Auto-Assign Divisions
                     </Button>
                     <Button
                       onClick={handleUploadParticipants}

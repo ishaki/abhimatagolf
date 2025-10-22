@@ -4,6 +4,7 @@ import { Edit2 } from 'lucide-react';
 import { getEventScorecards, ScorecardResponse } from '@/services/scorecardService';
 import { toast } from 'sonner';
 import ScoreEditModal from './ScoreEditModal';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface MultiParticipantScorecardProps {
   eventId: number;
@@ -14,6 +15,7 @@ const MultiParticipantScorecard: React.FC<MultiParticipantScorecardProps> = ({
   eventId,
   onScoreUpdate,
 }) => {
+  const { canManageScores } = usePermissions();
   const [scorecards, setScorecards] = useState<ScorecardResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingParticipant, setEditingParticipant] = useState<ScorecardResponse | null>(null);
@@ -76,11 +78,11 @@ const MultiParticipantScorecard: React.FC<MultiParticipantScorecardProps> = ({
   const getScoreColor = (score: number, par: number) => {
     if (score === 0) return 'bg-white';
     const diff = score - par;
-    if (diff <= -2) return 'bg-blue-300'; // Eagle or better
-    if (diff === -1) return 'bg-blue-200'; // Birdie
+    if (diff <= -2) return 'bg-green-600'; // Eagle or better
+    if (diff === -1) return 'bg-green-400'; // Birdie
     if (diff === 0) return 'bg-white border border-gray-300'; // Par
-    if (diff === 1) return 'bg-yellow-300'; // Bogey
-    if (diff >= 2) return 'bg-red-300'; // Double bogey or worse
+    if (diff === 1) return 'bg-red-200'; // Bogey
+    if (diff >= 2) return 'bg-red-400'; // Double bogey or worse
     return 'bg-white';
   };
 
@@ -111,40 +113,45 @@ const MultiParticipantScorecard: React.FC<MultiParticipantScorecardProps> = ({
     return (
       scorecard.participant_name?.toLowerCase().includes(searchLower)
     );
+  }).sort((a, b) => {
+    // Sort by participant name in ascending order
+    const nameA = a.participant_name?.toLowerCase() || '';
+    const nameB = b.participant_name?.toLowerCase() || '';
+    return nameA.localeCompare(nameB);
   });
 
   return (
     <>
       {/* Color Legend with Search */}
-      <div className="mb-4 p-4 bg-white rounded-lg border shadow-sm">
+      <div className="mb-4 p-4 bg-blue-100/50 rounded-lg border border-blue-200/50 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           {/* Score Legend */}
           <div className="flex-1">
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Score Legend:</h3>
+            <h3 className="text-sm font-semibold text-blue-800 mb-2">Score Legend:</h3>
             <div className="flex flex-wrap gap-4 text-xs">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-6 bg-blue-300 border border-gray-300 rounded"></div>
-                <span className="font-medium">Eagle or Better (-2 or more)</span>
+                <div className="w-8 h-6 bg-green-600 border border-gray-300 rounded"></div>
+                <span className="font-medium text-blue-800">Eagle or Better (-2 or more)</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-8 h-6 bg-blue-200 border border-gray-300 rounded"></div>
-                <span className="font-medium">Birdie (-1)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-6 bg-white border border-gray-300 rounded"></div>
-                <span className="font-medium">Par (0)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-6 bg-yellow-300 border border-gray-300 rounded"></div>
-                <span className="font-medium">Bogey (+1)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-6 bg-red-300 border border-gray-300 rounded"></div>
-                <span className="font-medium">Double Bogey or Worse (+2 or more)</span>
+                <div className="w-8 h-6 bg-green-400 border border-gray-300 rounded"></div>
+                <span className="font-medium text-blue-800">Birdie (-1)</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-8 h-6 bg-white border border-gray-300 rounded"></div>
-                <span className="font-medium">No Score</span>
+                <span className="font-medium text-blue-800">Par (0)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-6 bg-red-200 border border-gray-300 rounded"></div>
+                <span className="font-medium text-blue-800">Bogey (+1)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-6 bg-red-400 border border-gray-300 rounded"></div>
+                <span className="font-medium text-blue-800">Double Bogey or Worse (+2 or more)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-6 bg-white border border-gray-300 rounded"></div>
+                <span className="font-medium text-blue-800">No Score</span>
               </div>
             </div>
           </div>
@@ -208,60 +215,60 @@ const MultiParticipantScorecard: React.FC<MultiParticipantScorecardProps> = ({
 
       {/* Scorecard Table */}
       {(!searchQuery || filteredScorecards.length > 0) && (
-        <div className="overflow-x-auto border rounded-lg shadow-sm bg-white">
+        <div className="overflow-auto border rounded-lg shadow-sm bg-white" style={{ maxHeight: 'calc(100vh - 200px)' }}>
           <table className="w-full text-sm">
           <thead>
             {/* Header Row 1: Hole Numbers */}
-            <tr className="border-b bg-gray-50">
-              <th className="sticky left-0 z-20 bg-gray-50 border-r px-4 py-2 text-left font-semibold">
+            <tr className="border-b bg-gradient-to-r from-gray-50 via-gray-25 to-gray-50 text-gray-700">
+              <th className="sticky left-0 z-20 bg-gradient-to-r from-gray-50 via-gray-25 to-gray-50 border-r px-4 py-2 text-left font-semibold text-gray-700">
                 Player
               </th>
               {allHoles.slice(0, 9).map((hole) => (
-                <th key={hole.hole_number} className="px-2 py-2 text-center font-semibold min-w-[60px]">
+                <th key={hole.hole_number} className="px-1 py-2 text-center font-semibold min-w-[45px]">
                   {hole.hole_number}
                 </th>
               ))}
-              <th className="px-3 py-2 text-center font-semibold bg-blue-50 border-x min-w-[60px]">
+              <th className="px-2 py-2 text-center font-semibold bg-blue-50 border-x min-w-[45px]">
                 Out
               </th>
               {allHoles.slice(9, 18).map((hole) => (
-                <th key={hole.hole_number} className="px-2 py-2 text-center font-semibold min-w-[60px]">
+                <th key={hole.hole_number} className="px-1 py-2 text-center font-semibold min-w-[45px]">
                   {hole.hole_number}
                 </th>
               ))}
-              <th className="px-3 py-2 text-center font-semibold bg-blue-50 border-x min-w-[60px]">
+              <th className="px-2 py-2 text-center font-semibold bg-blue-50 border-x min-w-[45px]">
                 In
               </th>
-              <th className="px-3 py-2 text-center font-semibold bg-gray-100 border-x min-w-[70px]">
+              <th className="px-2 py-2 text-center font-semibold bg-gray-100 border-x min-w-[60px]">
                 Total
               </th>
-              <th className="sticky right-0 z-20 bg-gray-50 border-l px-4 py-2 text-center font-semibold min-w-[80px]">
+              <th className="sticky right-0 z-20 bg-gradient-to-r from-gray-50 via-gray-25 to-gray-50 border-l px-4 py-2 text-center font-semibold text-gray-700 min-w-[80px]">
                 Edit
               </th>
             </tr>
             {/* Header Row 2: Par & Index */}
-            <tr className="border-b bg-blue-50 text-xs">
-              <td className="sticky left-0 z-20 bg-blue-50 border-r px-4 py-2"></td>
+            <tr className="border-b bg-gradient-to-r from-gray-50 via-gray-25 to-gray-50 text-xs text-gray-700">
+              <td className="sticky left-0 z-20 bg-gradient-to-r from-gray-50 via-gray-25 to-gray-50 border-r px-4 py-2"></td>
               {/* Front 9 Par/Index */}
               {allHoles.slice(0, 9).map((hole) => (
-                <td key={`par-${hole.hole_number}`} className="px-2 py-1 text-center">
+                <td key={`par-${hole.hole_number}`} className="px-1 py-1 text-center">
                   <div className="font-medium">Par {hole.hole_par}</div>
                   <div className="text-gray-500">Id {hole.handicap_index}</div>
                 </td>
               ))}
               {/* Out column - no par info */}
-              <td className="px-3 py-1 bg-blue-100 border-x"></td>
+              <td className="px-2 py-1 bg-blue-100 border-x"></td>
               {/* Back 9 Par/Index */}
               {allHoles.slice(9, 18).map((hole) => (
-                <td key={`par-${hole.hole_number}`} className="px-2 py-1 text-center">
+                <td key={`par-${hole.hole_number}`} className="px-1 py-1 text-center">
                   <div className="font-medium">Par {hole.hole_par}</div>
                   <div className="text-gray-500">Id {hole.handicap_index}</div>
                 </td>
               ))}
               {/* In column - no par info */}
-              <td className="px-3 py-1 bg-blue-100 border-x"></td>
+              <td className="px-2 py-1 bg-blue-100 border-x"></td>
               {/* Total column - no par info */}
-              <td className="px-3 py-1 bg-gray-100 border-x"></td>
+              <td className="px-2 py-1 bg-gray-100 border-x"></td>
               {/* Edit column - no par info */}
               <td className="sticky right-0 z-20 bg-blue-50 border-l"></td>
             </tr>
@@ -280,22 +287,27 @@ const MultiParticipantScorecard: React.FC<MultiParticipantScorecardProps> = ({
               return (
                 <tr key={scorecard.participant_id} className="border-b hover:bg-gray-50">
                   {/* Player Name */}
-                  <td className="sticky left-0 z-10 bg-white border-r px-4 py-3 font-medium">
-                    <div>{scorecard.participant_name} ({scorecard.handicap})</div>
+                  <td className="sticky left-0 z-20 bg-white border-r px-2 py-2 font-medium w-32">
+                    <div 
+                      className="truncate" 
+                      title={`${scorecard.participant_name} (${scorecard.handicap})`}
+                    >
+                      {scorecard.participant_name} ({scorecard.handicap})
+                    </div>
                   </td>
 
                   {/* Front 9 Scores */}
                   {frontNineScores.map(({ hole, score }) => (
                     <td
                       key={`score-${scorecard.participant_id}-${hole.hole_number}`}
-                      className={`px-2 py-3 text-center font-semibold ${getScoreColor(score, hole.hole_par)}`}
+                      className={`px-1 py-2 text-center font-semibold ${getScoreColor(score, hole.hole_par)}`}
                     >
                       {score > 0 ? score : '-'}
                     </td>
                   ))}
 
                   {/* Out Total */}
-                  <td className="px-3 py-3 text-center font-bold bg-blue-100 border-x">
+                  <td className="px-2 py-2 text-center font-bold bg-blue-100 border-x">
                     {scorecard.out_total || '-'}
                   </td>
 
@@ -303,32 +315,34 @@ const MultiParticipantScorecard: React.FC<MultiParticipantScorecardProps> = ({
                   {backNineScores.map(({ hole, score }) => (
                     <td
                       key={`score-${scorecard.participant_id}-${hole.hole_number}`}
-                      className={`px-2 py-3 text-center font-semibold ${getScoreColor(score, hole.hole_par)}`}
+                      className={`px-1 py-2 text-center font-semibold ${getScoreColor(score, hole.hole_par)}`}
                     >
                       {score > 0 ? score : '-'}
                     </td>
                   ))}
 
                   {/* In Total */}
-                  <td className="px-3 py-3 text-center font-bold bg-blue-100 border-x">
+                  <td className="px-2 py-2 text-center font-bold bg-blue-100 border-x">
                     {scorecard.in_total || '-'}
                   </td>
 
                   {/* Total */}
-                  <td className="px-3 py-3 text-center font-bold text-lg bg-gray-100 border-x">
+                  <td className="px-2 py-2 text-center font-bold bg-gray-100 border-x">
                     {scorecard.gross_score || '-'}
                   </td>
 
                   {/* Edit Button */}
-                  <td className="sticky right-0 z-10 bg-white border-l px-4 py-3 text-center">
-                    <Button
-                      onClick={() => handleEditClick(scorecard)}
-                      size="sm"
-                      variant="outline"
-                      className="border-blue-300 text-blue-600 hover:bg-blue-50"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
+                  <td className="sticky right-0 z-20 bg-white border-l px-4 py-2 text-center">
+                    {canManageScores(eventId) && (
+                      <Button
+                        onClick={() => handleEditClick(scorecard)}
+                        size="sm"
+                        variant="outline"
+                        className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </td>
                 </tr>
               );

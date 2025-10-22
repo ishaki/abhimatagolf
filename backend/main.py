@@ -4,9 +4,9 @@ from contextlib import asynccontextmanager
 from core.config import settings
 from core.database import create_db_and_tables, get_session
 from core.app_logging import logger
-from api import auth, users, courses, events, participants, scorecards, event_divisions, leaderboards, excel, live_score
+from core.middleware import RequestIDMiddleware, ErrorHandlingMiddleware, SecurityHeadersMiddleware, RateLimitMiddleware
+from api import auth, users, courses, events, participants, scorecards, event_divisions, leaderboards, excel, live_score, winners, participant_bulk_operations, websocket
 from services.live_scoring_service import LiveScoringService
-import socketio
 import logging
 
 
@@ -38,10 +38,13 @@ app = FastAPI(
 # Initialize WebSocket service after app creation
 session = next(get_session())
 live_scoring_service = LiveScoringService(session)
-logger.info("WebSocket service initialized")
+logger.info("Live scoring service initialized")
 
-# Create SocketIO app and mount it
-sio_app = socketio.ASGIApp(live_scoring_service.get_app(), app)
+# Add security middleware (order matters!)
+app.add_middleware(RequestIDMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware, requests_per_minute=100)  # Configurable rate limit
+app.add_middleware(ErrorHandlingMiddleware)
 
 # Add CORS middleware
 app.add_middleware(
@@ -58,11 +61,14 @@ app.include_router(users.router)
 app.include_router(courses.router)
 app.include_router(events.router)
 app.include_router(participants.router)
+app.include_router(participant_bulk_operations.router)  # Bulk operations for participants
 app.include_router(scorecards.router)
 app.include_router(event_divisions.router)
 app.include_router(leaderboards.router)
 app.include_router(excel.router)
 app.include_router(live_score.router)  # Phase 3.2: Public live score display
+app.include_router(winners.router)  # Phase 3.3: Winner Page
+app.include_router(websocket.router)  # WebSocket endpoints for real-time updates
 
 
 @app.get("/")
@@ -88,7 +94,7 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "main:app",
+        "main:app",  # Use FastAPI app with native WebSocket support
         host="0.0.0.0",
         port=8000,
         reload=settings.debug

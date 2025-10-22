@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import List
+from typing import List, Optional
 import os
 
 
@@ -23,6 +23,26 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
     log_file: str = "logs/golf_tournament.log"
+
+    # Logging Security Features
+    # Enable log encryption for sensitive logs (audit, security)
+    log_encryption_enabled: bool = False
+    log_encryption_key: Optional[str] = None  # Base64 Fernet key from env
+    log_encryption_password: Optional[str] = None  # Alternative: derive key from password
+    log_encryption_salt: str = "abhimata-golf-logs-2024"
+    encrypted_log_types: List[str] = ["audit", "security"]
+
+    # Enable HMAC tamper detection for audit logs
+    log_tamper_detection_enabled: bool = True
+    log_hmac_secret: str = "change-this-hmac-secret-in-production"
+    signed_log_types: List[str] = ["audit", "security"]
+
+    # Log retention and archival (days)
+    log_retention_days_app: int = 30
+    log_retention_days_audit: int = 365
+    log_retention_days_security: int = 365
+    log_retention_days_performance: int = 7
+    log_retention_days_error: int = 90
     
     class Config:
         env_file = ".env"

@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Event, EventFilters, getEvents, deleteEvent } from '@/services/eventService';
 import { toast } from 'sonner';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useConfirm } from '@/hooks/useConfirm';
 
 interface EventListProps {
   onEditEvent: (event: Event) => void;
@@ -13,6 +15,8 @@ interface EventListProps {
 
 const EventList: React.FC<EventListProps> = ({ onEditEvent, onRefresh }) => {
   const navigate = useNavigate();
+  const { canManageParticipants, canManageScores } = usePermissions();
+  const { confirm } = useConfirm();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<EventFilters>({
@@ -56,7 +60,15 @@ const EventList: React.FC<EventListProps> = ({ onEditEvent, onRefresh }) => {
   };
 
   const handleDelete = async (eventId: number) => {
-    if (window.confirm('Are you sure you want to delete this event?')) {
+    const confirmed = await confirm({
+      title: 'Delete Event?',
+      description: 'Are you sure you want to delete this event? This action cannot be undone.',
+      variant: 'danger',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+    });
+
+    if (confirmed) {
       try {
         await deleteEvent(eventId);
         toast.success('Event deleted successfully');
@@ -208,6 +220,7 @@ const EventList: React.FC<EventListProps> = ({ onEditEvent, onRefresh }) => {
                       navigate(`/events/${event.id}`);
                     }}
                     className="flex-1 bg-blue-500 hover:bg-blue-600 text-white"
+                    disabled={!canManageParticipants(event.id) && !canManageScores(event.id)}
                   >
                     Manage
                   </Button>

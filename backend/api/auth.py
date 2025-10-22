@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlmodel import Session, select
 from datetime import timedelta
@@ -6,6 +6,8 @@ from typing import Optional
 from core.database import get_session
 from core.security import verify_password, get_password_hash, create_access_token, verify_token
 from core.config import settings
+from core.audit_logging import get_audit_logger, AuditAction
+from core.error_handling import create_secure_http_exception, ErrorCode, raise_security_error
 from models.user import User, UserRole
 from schemas.auth import Token, TokenData, UserLogin, UserResponse
 
@@ -16,25 +18,47 @@ security = HTTPBearer()
 @router.post("/login", response_model=Token)
 async def login(
     login_data: UserLogin,
+    request: Request,
     session: Session = Depends(get_session)
 ):
     """Login with email and password"""
+    
+    audit_logger = get_audit_logger()
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
     
     # Find user by email
     statement = select(User).where(User.email == login_data.email)
     user = session.exec(statement).first()
     
     if not user or not verify_password(login_data.password, user.hashed_password):
-        raise HTTPException(
+        # Log failed authentication attempt
+        audit_logger.log_authentication_failure(
+            email=login_data.email,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            reason="Invalid credentials"
+        )
+        raise create_secure_http_exception(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
+            message="Invalid credentials provided",
+            error_code=ErrorCode.AUTH_INVALID_CREDENTIALS,
+            details={"field": "email"}
         )
     
     if not user.is_active:
-        raise HTTPException(
+        # Log failed authentication attempt
+        audit_logger.log_authentication_failure(
+            email=login_data.email,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            reason="Account inactive"
+        )
+        raise create_secure_http_exception(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User account is inactive"
+            message="Account is inactive",
+            error_code=ErrorCode.AUTH_ACCOUNT_INACTIVE,
+            details={"field": "account_status"}
         )
     
     # Create access token
@@ -42,6 +66,15 @@ async def login(
     access_token = create_access_token(
         data={"sub": str(user.id), "email": user.email, "role": user.role},
         expires_delta=access_token_expires
+    )
+    
+    # Log successful authentication
+    audit_logger.log_authentication_success(
+        user_id=user.id,
+        user_email=user.email,
+        user_role=user.role,
+        ip_address=client_ip,
+        user_agent=user_agent
     )
     
     return Token(

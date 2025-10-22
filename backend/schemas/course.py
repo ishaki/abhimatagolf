@@ -1,13 +1,35 @@
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
-from models.course import Course, Hole
+from models.course import Course, Hole, Teebox
+
+
+class TeeboxCreate(BaseModel):
+    name: str
+    course_rating: float
+    slope_rating: int
+
+
+class TeeboxUpdate(BaseModel):
+    name: Optional[str] = None
+    course_rating: Optional[float] = None
+    slope_rating: Optional[int] = None
+
+
+class TeeboxResponse(BaseModel):
+    id: int
+    course_id: int
+    name: str
+    course_rating: float
+    slope_rating: int
+    created_at: datetime
+    updated_at: datetime
 
 
 class HoleCreate(BaseModel):
     number: int
     par: int
-    handicap_index: int
+    stroke_index: int
     distance_meters: Optional[float] = None
 
 
@@ -23,7 +45,7 @@ class HoleResponse(BaseModel):
     course_id: int
     number: int
     par: int
-    handicap_index: int
+    stroke_index: int
     distance_meters: Optional[float]
     created_at: datetime
 
@@ -49,6 +71,7 @@ class CourseResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     holes: List[HoleResponse] = []
+    teeboxes: List[TeeboxResponse] = []
 
 
 class CourseListResponse(BaseModel):

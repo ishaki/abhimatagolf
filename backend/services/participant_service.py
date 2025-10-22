@@ -98,6 +98,11 @@ class ParticipantService:
             division=participant.division,
             division_id=participant.division_id,
             registered_at=participant.registered_at,
+            country=participant.country,
+            sex=participant.sex,
+            phone_no=participant.phone_no,
+            event_status=participant.event_status,
+            event_description=participant.event_description,
             event_name=event_name,
             scorecard_count=scorecard_count,
             total_gross_score=int(scorecard_stats[0]),
@@ -124,7 +129,15 @@ class ParticipantService:
         if event_id:
             query = query.where(Participant.event_id == event_id)
         if division:
-            query = query.where(Participant.division == division)
+            # Handle special case for empty division filtering
+            if division == "__empty__":
+                query = query.where(
+                    (Participant.division.is_(None)) | 
+                    (Participant.division == "") |
+                    (Participant.division_id.is_(None))
+                )
+            else:
+                query = query.where(Participant.division == division)
         if division_id:
             query = query.where(Participant.division_id == division_id)
 
@@ -240,7 +253,12 @@ class ParticipantService:
                     name=row.name,
                     declared_handicap=row.declared_handicap,
                     division=row.division,
-                    division_id=row.division_id
+                    division_id=row.division_id,
+                    country=row.country,
+                    sex=row.sex,
+                    phone_no=row.phone_no,
+                    event_status=row.event_status,
+                    event_description=row.event_description
                 )
                 self.session.add(participant)
                 created_participants.append(participant)

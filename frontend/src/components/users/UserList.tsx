@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getUsers, deleteUser, User } from '@/services/userService';
 import { toast } from 'sonner';
+import { useConfirm } from '@/hooks/useConfirm';
 
 interface UserListProps {
   onEditUser: (user: User) => void;
@@ -11,6 +12,7 @@ interface UserListProps {
 }
 
 const UserList: React.FC<UserListProps> = ({ onEditUser, onRefresh }) => {
+  const { confirm } = useConfirm();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -38,7 +40,15 @@ const UserList: React.FC<UserListProps> = ({ onEditUser, onRefresh }) => {
   }, [page, search]);
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this user?')) {
+    const confirmed = await confirm({
+      title: 'Delete User?',
+      description: 'Are you sure you want to delete this user? This action cannot be undone.',
+      variant: 'danger',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+    });
+
+    if (!confirmed) {
       return;
     }
 

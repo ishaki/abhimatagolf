@@ -21,6 +21,7 @@ interface AuthState {
 interface AuthActions {
   login: (email: string, password: string) => Promise<void>
   logout: () => void
+  logoutFromExternalSource: () => void
   setUser: (user: User) => void
   setToken: (token: string) => void
   setLoading: (loading: boolean) => void
@@ -63,6 +64,21 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
       token: null,
       isAuthenticated: false,
     })
+  },
+
+  logoutFromExternalSource: () => {
+    // This method is called by API interceptors when session expires
+    // It clears the auth state without triggering additional API calls
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('user')
+    set({
+      user: null,
+      token: null,
+      isAuthenticated: false,
+    })
+    // Redirect to login page
+    window.location.href = '/login'
   },
 
   setUser: (user: User) => {

@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlmodel import Session, select, func
 from typing import List, Optional
 from core.database import get_session
-from models.course import Course, Hole
+from core.permissions import require_super_admin
+from models.course import Course, Hole, Teebox
 from models.user import User, UserRole
-from schemas.course import CourseCreate, CourseUpdate, CourseResponse, CourseListResponse, HoleCreate, HoleResponse
+from schemas.course import CourseCreate, CourseUpdate, CourseResponse, CourseListResponse, HoleCreate, HoleResponse, TeeboxCreate, TeeboxUpdate, TeeboxResponse
 from api.auth import get_current_user
 
 router = APIRouter(prefix="/api/v1/courses", tags=["courses"])
@@ -49,6 +50,9 @@ async def get_courses(
         holes_statement = select(Hole).where(Hole.course_id == course.id).order_by(Hole.number)
         holes = session.exec(holes_statement).all()
         
+        teeboxes_statement = select(Teebox).where(Teebox.course_id == course.id).order_by(Teebox.name)
+        teeboxes = session.exec(teeboxes_statement).all()
+        
         course_response = CourseResponse(
             id=course.id,
             name=course.name,
@@ -56,7 +60,8 @@ async def get_courses(
             total_holes=course.total_holes,
             created_at=course.created_at,
             updated_at=course.updated_at,
-            holes=[HoleResponse.model_validate(hole, from_attributes=True) for hole in holes]
+            holes=[HoleResponse.model_validate(hole, from_attributes=True) for hole in holes],
+            teeboxes=[TeeboxResponse.model_validate(teebox, from_attributes=True) for teebox in teeboxes]
         )
         course_responses.append(course_response)
     
@@ -72,16 +77,9 @@ async def get_courses(
 async def create_course(
     course_data: CourseCreate,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_super_admin())
 ):
-    """Create a new course"""
-    
-    # Check permissions (event_admin and super_admin can create courses)
-    if current_user.role not in [UserRole.EVENT_ADMIN, UserRole.SUPER_ADMIN]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions"
-        )
+    """Create a new course - SUPER_ADMIN only"""
     
     # Create course
     course = Course(
@@ -101,16 +99,19 @@ async def create_course(
                 course_id=course.id,
                 number=hole_data.number,
                 par=hole_data.par,
-                handicap_index=hole_data.handicap_index,
+                stroke_index=hole_data.stroke_index,
                 distance_meters=hole_data.distance_meters
             )
             session.add(hole)
         
         session.commit()
     
-    # Get holes for response
+    # Get holes and teeboxes for response
     holes_statement = select(Hole).where(Hole.course_id == course.id).order_by(Hole.number)
     holes = session.exec(holes_statement).all()
+    
+    teeboxes_statement = select(Teebox).where(Teebox.course_id == course.id).order_by(Teebox.name)
+    teeboxes = session.exec(teeboxes_statement).all()
     
     return CourseResponse(
         id=course.id,
@@ -119,7 +120,8 @@ async def create_course(
         total_holes=course.total_holes,
         created_at=course.created_at,
         updated_at=course.updated_at,
-        holes=[HoleResponse.model_validate(hole, from_attributes=True) for hole in holes]
+        holes=[HoleResponse.model_validate(hole, from_attributes=True) for hole in holes],
+        teeboxes=[TeeboxResponse.model_validate(teebox, from_attributes=True) for teebox in teeboxes]
     )
 
 
@@ -140,9 +142,12 @@ async def get_course(
             detail="Course not found"
         )
     
-    # Get holes
+    # Get holes and teeboxes
     holes_statement = select(Hole).where(Hole.course_id == course.id).order_by(Hole.number)
     holes = session.exec(holes_statement).all()
+    
+    teeboxes_statement = select(Teebox).where(Teebox.course_id == course.id).order_by(Teebox.name)
+    teeboxes = session.exec(teeboxes_statement).all()
     
     return CourseResponse(
         id=course.id,
@@ -151,7 +156,8 @@ async def get_course(
         total_holes=course.total_holes,
         created_at=course.created_at,
         updated_at=course.updated_at,
-        holes=[HoleResponse.model_validate(hole, from_attributes=True) for hole in holes]
+        holes=[HoleResponse.model_validate(hole, from_attributes=True) for hole in holes],
+        teeboxes=[TeeboxResponse.model_validate(teebox, from_attributes=True) for teebox in teeboxes]
     )
 
 
@@ -160,16 +166,9 @@ async def update_course(
     course_id: int,
     course_data: CourseUpdate,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_super_admin())
 ):
-    """Update course"""
-    
-    # Check permissions
-    if current_user.role not in [UserRole.EVENT_ADMIN, UserRole.SUPER_ADMIN]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions"
-        )
+    """Update course - SUPER_ADMIN only"""
     
     statement = select(Course).where(Course.id == course_id)
     course = session.exec(statement).first()
@@ -189,9 +188,12 @@ async def update_course(
     session.commit()
     session.refresh(course)
     
-    # Get holes for response
+    # Get holes and teeboxes for response
     holes_statement = select(Hole).where(Hole.course_id == course.id).order_by(Hole.number)
     holes = session.exec(holes_statement).all()
+    
+    teeboxes_statement = select(Teebox).where(Teebox.course_id == course.id).order_by(Teebox.name)
+    teeboxes = session.exec(teeboxes_statement).all()
     
     return CourseResponse(
         id=course.id,
@@ -200,7 +202,8 @@ async def update_course(
         total_holes=course.total_holes,
         created_at=course.created_at,
         updated_at=course.updated_at,
-        holes=[HoleResponse.model_validate(hole, from_attributes=True) for hole in holes]
+        holes=[HoleResponse.model_validate(hole, from_attributes=True) for hole in holes],
+        teeboxes=[TeeboxResponse.model_validate(teebox, from_attributes=True) for teebox in teeboxes]
     )
 
 
@@ -208,16 +211,9 @@ async def update_course(
 async def delete_course(
     course_id: int,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_super_admin())
 ):
-    """Delete course"""
-    
-    # Check permissions
-    if current_user.role not in [UserRole.EVENT_ADMIN, UserRole.SUPER_ADMIN]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions"
-        )
+    """Delete course - SUPER_ADMIN only"""
     
     statement = select(Course).where(Course.id == course_id)
     course = session.exec(statement).first()
@@ -263,16 +259,9 @@ async def update_course_holes(
     course_id: int,
     holes_data: List[HoleCreate],
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_super_admin())
 ):
-    """Update holes for a course"""
-    
-    # Check permissions
-    if current_user.role not in [UserRole.EVENT_ADMIN, UserRole.SUPER_ADMIN]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions"
-        )
+    """Update holes for a course - SUPER_ADMIN only"""
     
     # Verify course exists
     course_statement = select(Course).where(Course.id == course_id)
@@ -296,7 +285,7 @@ async def update_course_holes(
             course_id=course_id,
             number=hole_data.number,
             par=hole_data.par,
-            handicap_index=hole_data.handicap_index,
+            stroke_index=hole_data.stroke_index,
             distance_meters=hole_data.distance_meters
         )
         session.add(hole)
@@ -308,3 +297,140 @@ async def update_course_holes(
     holes = session.exec(holes_statement).all()
     
     return [HoleResponse.model_validate(hole, from_attributes=True) for hole in holes]
+
+
+# Teebox Management Endpoints
+
+@router.get("/{course_id}/teeboxes", response_model=List[TeeboxResponse])
+async def get_course_teeboxes(
+    course_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Get teeboxes for a course"""
+    
+    # Verify course exists
+    course_statement = select(Course).where(Course.id == course_id)
+    course = session.exec(course_statement).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+    
+    teeboxes_statement = select(Teebox).where(Teebox.course_id == course_id).order_by(Teebox.name)
+    teeboxes = session.exec(teeboxes_statement).all()
+    
+    return [TeeboxResponse.model_validate(teebox, from_attributes=True) for teebox in teeboxes]
+
+
+@router.post("/{course_id}/teeboxes", response_model=TeeboxResponse)
+async def create_teebox(
+    course_id: int,
+    teebox_data: TeeboxCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_super_admin())
+):
+    """Create a new teebox for a course - SUPER_ADMIN only"""
+    
+    # Verify course exists
+    course_statement = select(Course).where(Course.id == course_id)
+    course = session.exec(course_statement).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+    
+    # Create teebox
+    teebox = Teebox(
+        course_id=course_id,
+        name=teebox_data.name,
+        course_rating=teebox_data.course_rating,
+        slope_rating=teebox_data.slope_rating
+    )
+    
+    session.add(teebox)
+    session.commit()
+    session.refresh(teebox)
+    
+    return TeeboxResponse.model_validate(teebox, from_attributes=True)
+
+
+@router.put("/{course_id}/teeboxes/{teebox_id}", response_model=TeeboxResponse)
+async def update_teebox(
+    course_id: int,
+    teebox_id: int,
+    teebox_data: TeeboxUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_super_admin())
+):
+    """Update a teebox - SUPER_ADMIN only"""
+    
+    # Verify course exists
+    course_statement = select(Course).where(Course.id == course_id)
+    course = session.exec(course_statement).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+    
+    # Get teebox
+    teebox_statement = select(Teebox).where(Teebox.id == teebox_id, Teebox.course_id == course_id)
+    teebox = session.exec(teebox_statement).first()
+    
+    if not teebox:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Teebox not found"
+        )
+    
+    # Update fields
+    update_data = teebox_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(teebox, field, value)
+    
+    session.add(teebox)
+    session.commit()
+    session.refresh(teebox)
+    
+    return TeeboxResponse.model_validate(teebox, from_attributes=True)
+
+
+@router.delete("/{course_id}/teeboxes/{teebox_id}")
+async def delete_teebox(
+    course_id: int,
+    teebox_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_super_admin())
+):
+    """Delete a teebox - SUPER_ADMIN only"""
+    
+    # Verify course exists
+    course_statement = select(Course).where(Course.id == course_id)
+    course = session.exec(course_statement).first()
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+    
+    # Get teebox
+    teebox_statement = select(Teebox).where(Teebox.id == teebox_id, Teebox.course_id == course_id)
+    teebox = session.exec(teebox_statement).first()
+    
+    if not teebox:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Teebox not found"
+        )
+    
+    session.delete(teebox)
+    session.commit()
+    
+    return {"message": "Teebox deleted successfully"}

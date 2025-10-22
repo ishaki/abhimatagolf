@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { handleAuthError } from '@/utils/authErrorHandler';
 
 // Create a separate API instance for events since they use different base URL
 const eventsApi = axios.create({
@@ -28,9 +29,7 @@ eventsApi.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      handleAuthError();
     }
     return Promise.reject(error);
   }
@@ -106,36 +105,36 @@ export const getEvents = async (filters: EventFilters = {}): Promise<EventListRe
   if (filters.scoring_type) params.append('scoring_type', filters.scoring_type);
   if (filters.is_active !== undefined) params.append('is_active', filters.is_active.toString());
 
-  const response = await eventsApi.get(`/events/?${params.toString()}`);
+  const response = await eventsApi.get(`/api/v1/events/?${params.toString()}`);
   return response.data;
 };
 
 export const getEvent = async (eventId: number): Promise<Event> => {
-  const response = await eventsApi.get(`/events/${eventId}`);
+  const response = await eventsApi.get(`/api/v1/events/${eventId}`);
   return response.data;
 };
 
 export const createEvent = async (eventData: EventCreate): Promise<Event> => {
-  const response = await eventsApi.post('/events/', eventData);
+  const response = await eventsApi.post('/api/v1/events/', eventData);
   return response.data;
 };
 
 export const updateEvent = async (eventId: number, eventData: EventUpdate): Promise<Event> => {
-  const response = await eventsApi.put(`/events/${eventId}`, eventData);
+  const response = await eventsApi.put(`/api/v1/events/${eventId}`, eventData);
   return response.data;
 };
 
 export const deleteEvent = async (eventId: number): Promise<void> => {
-  await eventsApi.delete(`/events/${eventId}`);
+  await eventsApi.delete(`/api/v1/events/${eventId}`);
 };
 
 export const getEventStats = async (): Promise<EventStats> => {
-  const response = await eventsApi.get('/events/stats/overview');
+  const response = await eventsApi.get('/api/v1/events/stats/overview');
   return response.data;
 };
 
 export const duplicateEvent = async (eventId: number, newName: string, newDate: string): Promise<Event> => {
-  const response = await eventsApi.post(`/events/${eventId}/duplicate`, {
+  const response = await eventsApi.post(`/api/v1/events/${eventId}/duplicate`, {
     new_name: newName,
     new_date: newDate
   });

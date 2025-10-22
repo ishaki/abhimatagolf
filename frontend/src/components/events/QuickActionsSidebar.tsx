@@ -2,12 +2,15 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Event } from '@/services/eventService';
+import { UserPlus } from 'lucide-react';
 
 interface QuickActionsSidebarProps {
   event: Event;
   onEditEvent: () => void;
-  onToggleStatus: () => void;
-  onDeleteEvent: () => void;
+  onToggleStatus: () => Promise<void>;
+  onDeleteEvent: () => Promise<void>;
+  onAddEventUser?: () => void;
+  canCreateEventUsers?: boolean;
 }
 
 const QuickActionsSidebar: React.FC<QuickActionsSidebarProps> = ({
@@ -15,11 +18,13 @@ const QuickActionsSidebar: React.FC<QuickActionsSidebarProps> = ({
   onEditEvent,
   onToggleStatus,
   onDeleteEvent,
+  onAddEventUser,
+  canCreateEventUsers = false,
 }) => {
   return (
     <div className="hidden lg:block w-64 bg-white border-l border-gray-200 flex-shrink-0">
       <div className="p-6">
-        <Card>
+        <Card className="shadow-sm border border-gray-200">
           <CardHeader className="pb-4">
             <CardTitle className="text-lg font-semibold text-gray-900">
               Quick Actions
@@ -75,9 +80,20 @@ const QuickActionsSidebar: React.FC<QuickActionsSidebarProps> = ({
               {event.is_active ? 'Deactivate Event' : 'Activate Event'}
             </Button>
 
+            {canCreateEventUsers && onAddEventUser && (
+              <Button
+                onClick={onAddEventUser}
+                variant="outline"
+                className="w-full justify-start border-purple-300 text-purple-600 hover:bg-purple-50"
+              >
+                <UserPlus className="w-4 h-4 mr-2" />
+                Add Event User
+              </Button>
+            )}
+
             <Button
               variant="outline"
-              className="w-full border-purple-300 text-purple-600 hover:bg-purple-50 justify-start"
+              className="w-full border-gray-300 text-gray-600 hover:bg-gray-50 justify-start opacity-60"
               disabled
               title="Export feature coming in Phase 2.5"
             >
@@ -121,7 +137,7 @@ const QuickActionsSidebar: React.FC<QuickActionsSidebarProps> = ({
         </Card>
 
         {/* Event Status Info */}
-        <Card className="mt-4">
+        <Card className="mt-4 shadow-sm border border-gray-200">
           <CardContent className="pt-6">
             <div className="text-center">
               <div className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${

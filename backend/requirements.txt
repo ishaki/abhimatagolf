@@ -10,4 +10,6 @@ email-validator==2.1.0
 python-dotenv==1.0.0
 pandas>=2.2.0
 openpyxl==3.1.2
-python-socketio==5.10.0
+concurrent-log-handler==0.9.25
+cryptography>=41.0.0
+psutil>=5.9.0

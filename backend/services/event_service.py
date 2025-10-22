@@ -41,7 +41,8 @@ class EventService:
         course_id: Optional[int] = None,
         scoring_type: Optional[ScoringType] = None,
         is_active: Optional[bool] = None,
-        created_by: Optional[int] = None
+        created_by: Optional[int] = None,
+        accessible_event_ids: Optional[List[int]] = None
     ) -> tuple[List[Event], int]:
         """Get events with filtering and pagination"""
         # Build query
@@ -69,6 +70,10 @@ class EventService:
         if created_by:
             statement = statement.where(Event.created_by == created_by)
             count_statement = count_statement.where(Event.created_by == created_by)
+        
+        if accessible_event_ids:
+            statement = statement.where(Event.id.in_(accessible_event_ids))
+            count_statement = count_statement.where(Event.id.in_(accessible_event_ids))
         
         # Apply pagination
         offset = (page - 1) * per_page

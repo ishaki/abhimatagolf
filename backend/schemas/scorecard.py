@@ -1,18 +1,36 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from typing import List, Optional
 from datetime import datetime
+from core.validation import SecurityValidators
 
 
 class HoleScoreInput(BaseModel):
     """Input for a single hole score"""
     hole_number: int = Field(ge=1, le=18, description="Hole number (1-18)")
     strokes: int = Field(ge=1, le=15, description="Number of strokes (1-15)")
+    
+    @validator('hole_number')
+    def validate_hole_number(cls, v):
+        """Validate hole number"""
+        return SecurityValidators.validate_hole_number(cls, v)
+    
+    @validator('strokes')
+    def validate_strokes(cls, v):
+        """Validate stroke count"""
+        return SecurityValidators.validate_strokes(cls, v)
 
 
 class ScorecardSubmit(BaseModel):
     """Submit scorecard for a participant"""
-    participant_id: int
-    scores: List[HoleScoreInput] = Field(min_items=1, max_items=18)
+    participant_id: int = Field(..., gt=0, description="Participant ID")
+    scores: List[HoleScoreInput] = Field(min_items=1, max_items=18, description="List of hole scores")
+    
+    @validator('participant_id')
+    def validate_participant_id(cls, v):
+        """Validate participant ID"""
+        if v <= 0:
+            raise ValueError("Participant ID must be positive")
+        return v
 
 
 class HoleScoreResponse(BaseModel):

@@ -1,6 +1,51 @@
 import axios from 'axios';
+import { handleAuthError } from '@/utils/authErrorHandler';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+// Create authenticated axios instance for event divisions
+const eventDivisionsApi = axios.create({
+  baseURL: `${API_BASE_URL}/api`,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Add auth interceptor
+eventDivisionsApi.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor to handle authentication errors
+eventDivisionsApi.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      handleAuthError();
+    }
+    return Promise.reject(error);
+  }
+);
+
+export interface Teebox {
+  id: number;
+  course_id: number;
+  name: string;
+  course_rating: number;
+  slope_rating: number;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface EventDivision {
   id: number;
@@ -10,10 +55,12 @@ export interface EventDivision {
   handicap_min?: number;
   handicap_max?: number;
   max_participants?: number;
+  teebox_id?: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
   participant_count?: number;
+  teebox?: Teebox;
 }
 
 export interface EventDivisionCreate {
@@ -23,6 +70,7 @@ export interface EventDivisionCreate {
   handicap_min?: number;
   handicap_max?: number;
   max_participants?: number;
+  teebox_id?: number;
   is_active?: boolean;
 }
 
@@ -32,6 +80,7 @@ export interface EventDivisionUpdate {
   handicap_min?: number;
   handicap_max?: number;
   max_participants?: number;
+  teebox_id?: number;
   is_active?: boolean;
 }
 
@@ -54,39 +103,37 @@ export interface DivisionStats {
 }
 
 class EventDivisionService {
-  private baseUrl = `${API_BASE_URL}/api/event-divisions`;
-
   async getDivisionsForEvent(eventId: number): Promise<EventDivision[]> {
-    const response = await axios.get(`${this.baseUrl}/event/${eventId}`);
+    const response = await eventDivisionsApi.get(`/event-divisions/event/${eventId}`);
     return response.data;
   }
 
   async getDivision(divisionId: number): Promise<EventDivision> {
-    const response = await axios.get(`${this.baseUrl}/${divisionId}`);
+    const response = await eventDivisionsApi.get(`/event-divisions/${divisionId}`);
     return response.data;
   }
 
   async createDivision(divisionData: EventDivisionCreate): Promise<EventDivision> {
-    const response = await axios.post(this.baseUrl, divisionData);
+    const response = await eventDivisionsApi.post('/event-divisions', divisionData);
     return response.data;
   }
 
   async createDivisionsBulk(bulkData: EventDivisionBulkCreate): Promise<EventDivision[]> {
-    const response = await axios.post(`${this.baseUrl}/bulk`, bulkData);
+    const response = await eventDivisionsApi.post('/event-divisions/bulk', bulkData);
     return response.data;
   }
 
   async updateDivision(divisionId: number, divisionData: EventDivisionUpdate): Promise<EventDivision> {
-    const response = await axios.put(`${this.baseUrl}/${divisionId}`, divisionData);
+    const response = await eventDivisionsApi.put(`/event-divisions/${divisionId}`, divisionData);
     return response.data;
   }
 
   async deleteDivision(divisionId: number): Promise<void> {
-    await axios.delete(`${this.baseUrl}/${divisionId}`);
+    await eventDivisionsApi.delete(`/event-divisions/${divisionId}`);
   }
 
   async getDivisionStats(eventId: number): Promise<DivisionStats> {
-    const response = await axios.get(`${this.baseUrl}/event/${eventId}/stats`);
+    const response = await eventDivisionsApi.get(`/event-divisions/event/${eventId}/stats`);
     return response.data;
   }
 }
