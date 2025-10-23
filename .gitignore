@@ -258,3 +258,32 @@ backups/
 
 # Exclude problematic files
 backend/nul
+
+# Files containing passwords and sensitive information
+backend/create_test_user.py
+backend/init_and_create_user.py
+backend/Utils/recreate_users.py
+backend/core/seed_data.py
+backend/env.example
+backend/.env
+.env
+.env.local
+.env.development
+.env.production
+.env.staging
+
+# Configuration files that may contain sensitive data
+backend/core/config.py
+backend/core/log_security.py
+backend/core/log_handlers.py
+
+# Test files with hardcoded credentials
+backend/create_test_event.py
+backend/check_event.py
+backend/debug_scores.py
+backend/test_*.py
+test_*.py
+
+# Documentation files that may contain sensitive information
+README.md
+ABHIMATA_GOLF_PRD.md
