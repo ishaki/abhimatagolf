@@ -59,7 +59,7 @@ const ParticipantUpload: React.FC<ParticipantUploadProps> = ({ eventId, onUpload
 
   const handleDownloadTemplate = async () => {
     try {
-      await downloadParticipantTemplate();
+      await downloadParticipantTemplate(eventId);
       toast.success('Excel template downloaded successfully!');
     } catch (error) {
       console.error('Error downloading template:', error);
@@ -82,9 +82,9 @@ const ParticipantUpload: React.FC<ParticipantUploadProps> = ({ eventId, onUpload
                 <ul className="list-disc list-inside text-sm text-blue-800 space-y-2">
                   <li>Excel (.xlsx, .xls) or CSV (.csv) file</li>
                   <li>Required column: <strong>name</strong></li>
-                  <li>Optional columns: <strong>declared_handicap</strong>, <strong>division</strong>, <strong>division_id</strong></li>
                   <li>Handicap values must be between 0 and 54</li>
                   <li>Division ID should reference an existing event division</li>
+                  <li>Template includes event divisions reference for easy lookup</li>
                 </ul>
                 
                 <div className="mt-4 pt-4 border-t border-blue-200">

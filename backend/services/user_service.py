@@ -193,6 +193,57 @@ class UserService:
         results = self.session.exec(statement).all()
         return results
     
+    def update_user_event_access(self, user_id: int, event_id: int, access_level: AccessLevel, updater_user: Optional[User] = None) -> bool:
+        """
+        Update a user's access level for an event.
+        
+        Args:
+            user_id: The ID of the user
+            event_id: The ID of the event
+            access_level: The new access level
+            updater_user: The user performing this action (for audit logging)
+            
+        Returns:
+            bool: True if successful, False if relationship didn't exist
+        """
+        user_event_statement = select(UserEvent).where(
+            UserEvent.user_id == user_id,
+            UserEvent.event_id == event_id
+        )
+        user_event = self.session.exec(user_event_statement).first()
+        
+        if not user_event:
+            return False
+        
+        # Get user and event info for logging
+        user_statement = select(User).where(User.id == user_id)
+        user = self.session.exec(user_statement).first()
+        
+        event_statement = select(Event).where(Event.id == event_id)
+        event = self.session.exec(event_statement).first()
+        
+        # Store old access level for logging
+        old_access_level = user_event.access_level
+        
+        # Update the access level
+        user_event.access_level = access_level
+        self.session.add(user_event)
+        self.session.commit()
+        
+        # Log the update
+        if updater_user and user and event:
+            self.audit_logger.log_user_action(
+                action=AuditAction.USER_UPDATE,
+                user_id=updater_user.id,
+                user_email=updater_user.email,
+                user_role=updater_user.role,
+                resource_type="user_event",
+                description=f"Updated user '{user.full_name}' access level from '{old_access_level.value}' to '{access_level.value}' for event '{event.name}'",
+                resource_id=user_event.id
+            )
+        
+        return True
+    
     def remove_user_from_event(self, user_id: int, event_id: int, creator_user: Optional[User] = None) -> bool:
         """
         Remove a user from an event (delete UserEvent relationship).

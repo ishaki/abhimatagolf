@@ -43,6 +43,7 @@ export interface Event {
   course_id: number;
   created_by: number;
   scoring_type: 'stroke' | 'net_stroke' | 'system_36' | 'stableford';
+  system36_variant?: 'standard' | 'modified';
   divisions_config?: Record<string, any>;
   is_active: boolean;
   created_at: string;
@@ -58,6 +59,7 @@ export interface EventCreate {
   event_date: string;
   course_id: number;
   scoring_type: 'stroke' | 'net_stroke' | 'system_36' | 'stableford';
+  system36_variant?: 'standard' | 'modified';
   is_active?: boolean;
 }
 
@@ -67,6 +69,7 @@ export interface EventUpdate {
   event_date?: string;
   course_id?: number;
   scoring_type?: 'stroke' | 'net_stroke' | 'system_36' | 'stableford';
+  system36_variant?: 'standard' | 'modified';
   divisions_config?: Record<string, any>;
   is_active?: boolean;
 }

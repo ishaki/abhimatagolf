@@ -104,3 +104,9 @@ export const getEventUsers = async (eventId: number): Promise<EventUsersListResp
 export const removeEventUser = async (eventId: number, userId: number): Promise<void> => {
   await api.delete(`/users/event/${eventId}/user/${userId}`);
 };
+
+export const updateEventUserAccess = async (eventId: number, userId: number, accessLevel: string): Promise<void> => {
+  await api.put(`/users/event/${eventId}/user/${userId}/access`, {
+    access_level: accessLevel
+  });
+};

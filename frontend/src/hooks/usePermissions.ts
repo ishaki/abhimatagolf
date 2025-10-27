@@ -23,15 +23,16 @@ export interface UsePermissionsReturn {
   canManageCourses: () => boolean;
   canManageUsers: () => boolean;
   canCreateEvents: () => boolean;
-  canAccessWinners: () => boolean;
-  canViewWinners: () => boolean;
+  canAccessWinners: (eventId?: number, event?: any) => boolean;
+  canViewWinners: (eventId?: number, event?: any) => boolean;
+  canConfigureWinners: (eventId?: number, event?: any) => boolean;
   canCreateEventUsers: () => boolean;
-  canManageParticipants: (eventId?: number) => boolean;
-  canManageScores: (eventId?: number) => boolean;
+  canManageParticipants: (eventId?: number, event?: any) => boolean;
+  canManageScores: (eventId?: number, event?: any) => boolean;
   
   // Event-specific checks
-  canAccessEvent: (eventId: number) => boolean;
-  canEditEvent: (eventId: number) => boolean;
+  canAccessEvent: (eventId: number, event?: any) => boolean;
+  canEditEvent: (eventId: number, event?: any) => boolean;
   
   // Current user info
   currentUser: any;
@@ -63,12 +64,58 @@ export const usePermissions = (): UsePermissionsReturn => {
     return isSuperAdmin();
   };
   
-  const canAccessWinners = (): boolean => {
-    return isSuperAdmin() || isEventAdmin();
+  const canAccessWinners = (eventId?: number, event?: any): boolean => {
+    if (!user) return false;
+    
+    // Super admins can access winners for all events
+    if (isSuperAdmin()) return true;
+    
+    // Event admins can only access winners for events they created
+    if (isEventAdmin()) {
+      if (event && event.created_by === user.id) {
+        return true;
+      }
+      // If no event data provided, we can't determine ownership
+      return false;
+    }
+    
+    return false;
   };
   
-  const canViewWinners = (): boolean => {
-    return isSuperAdmin() || isEventAdmin();
+  const canViewWinners = (eventId?: number, event?: any): boolean => {
+    if (!user) return false;
+    
+    // Super admins can view winners for all events
+    if (isSuperAdmin()) return true;
+    
+    // Event admins can only view winners for events they created
+    if (isEventAdmin()) {
+      if (event && event.created_by === user.id) {
+        return true;
+      }
+      // If no event data provided, we can't determine ownership
+      return false;
+    }
+    
+    return false;
+  };
+  
+  const canConfigureWinners = (eventId?: number, event?: any): boolean => {
+    if (!user) return false;
+    
+    // Super admins can configure winners for all events
+    if (isSuperAdmin()) return true;
+    
+    // Event admins can only configure winners for events they created
+    if (isEventAdmin()) {
+      if (event && event.created_by === user.id) {
+        return true;
+      }
+      // If no event data provided, we can't determine ownership
+      return false;
+    }
+    
+    return false;
   };
   
   const canCreateEventUsers = (): boolean => {
@@ -79,16 +126,19 @@ export const usePermissions = (): UsePermissionsReturn => {
     return isSuperAdmin() || isEventAdmin();
   };
   
-  const canManageParticipants = (eventId?: number): boolean => {
+  const canManageParticipants = (eventId?: number, event?: any): boolean => {
     if (!user) return false;
     
     // Super admins can manage participants for all events
     if (isSuperAdmin()) return true;
     
-    // Event admins can manage participants for events they created
+    // Event admins can only manage participants for events they created
     if (isEventAdmin()) {
-      // For now, assume event admins can manage participants for events they're viewing
-      return true;
+      if (event && event.created_by === user.id) {
+        return true;
+      }
+      // If no event data provided, we can't determine ownership
+      return false;
     }
     
     // Event users can only manage participants for events they're assigned to
@@ -101,16 +151,19 @@ export const usePermissions = (): UsePermissionsReturn => {
     return false;
   };
   
-  const canManageScores = (eventId?: number): boolean => {
+  const canManageScores = (eventId?: number, event?: any): boolean => {
     if (!user) return false;
     
     // Super admins can manage scores for all events
     if (isSuperAdmin()) return true;
     
-    // Event admins can manage scores for events they created
+    // Event admins can only manage scores for events they created
     if (isEventAdmin()) {
-      // For now, assume event admins can manage scores for events they're viewing
-      return true;
+      if (event && event.created_by === user.id) {
+        return true;
+      }
+      // If no event data provided, we can't determine ownership
+      return false;
     }
     
     // Event users can only manage scores for events they're assigned to
@@ -124,39 +177,39 @@ export const usePermissions = (): UsePermissionsReturn => {
   };
   
   // Event-specific checks
-  const canAccessEvent = (eventId: number): boolean => {
+  const canAccessEvent = (eventId: number, event?: any): boolean => {
     if (!user) return false;
     
     // Super admins can access all events
     if (isSuperAdmin()) return true;
     
-    // Event admins can access events they created
-    if (isEventAdmin()) {
-      // This would need to be checked against the event's creator_id
-      // For now, we'll assume event admins can access events they're viewing
-      return true;
-    }
+    // Event admins can access ALL events (read-only for events they didn't create)
+    if (isEventAdmin()) return true;
     
     // Event users can only access events they're assigned to
     if (isEventUser()) {
       // This would need to be checked against UserEvent relationships
-      // For now, we'll assume they can access events they're viewing
+      // For now, assume they can access events they're viewing
       return true;
     }
     
     return false;
   };
   
-  const canEditEvent = (eventId: number): boolean => {
+  const canEditEvent = (eventId: number, event?: any): boolean => {
     if (!user) return false;
     
     // Super admins can edit all events
     if (isSuperAdmin()) return true;
     
-    // Event admins can edit events they created
+    // Event admins can only edit events they created
     if (isEventAdmin()) {
-      // This would need to be checked against the event's creator_id
-      return true;
+      // Check if the event was created by the current user
+      if (event && event.created_by === user.id) {
+        return true;
+      }
+      // If no event data provided, we can't determine ownership
+      return false;
     }
     
     // Event users cannot edit events
@@ -175,6 +228,7 @@ export const usePermissions = (): UsePermissionsReturn => {
     canCreateEvents,
     canAccessWinners,
     canViewWinners,
+    canConfigureWinners,
     canCreateEventUsers,
     canManageParticipants,
     canManageScores,

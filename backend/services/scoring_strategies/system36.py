@@ -1,32 +1,41 @@
 """
 System 36 Scoring Strategy
 
-System 36 is a unique handicapping system where points are awarded based on
-performance relative to par. The system calculates a handicap from the round
-being played, making it fair for players without established handicaps.
+System 36 is a same-day handicapping system for golfers without official handicaps.
+Points are awarded based on GROSS score performance, and a handicap is calculated
+from the round being played.
 
-Rules:
-- Points awarded per hole based on score vs par:
-  * Double Eagle (-3 or better): 8 points
-  * Eagle (-2): 5 points
-  * Birdie (-1): 4 points
-  * Par (0): 3 points
-  * Bogey (+1): 2 points
-  * Double Bogey (+2): 1 point
-  * Triple Bogey or worse (+3+): 0 points
+Official Rules (GROSS Scoring):
+- Points awarded per hole based on GROSS score vs par:
+  * Par or better (≤0): 2 points
+  * Bogey (+1): 1 point
+  * Double Bogey or worse (≥+2): 0 points
 
-- Handicap calculated from points:
-  * System 36 Handicap = 36 - (Total Points / Holes Played) × 18
+- System 36 Handicap (calculated after full 18 holes):
+  * System 36 Handicap = 36 - Total Points
+  * Only calculated for complete 18-hole rounds
+  * Example: Player scores 23 total points
+    - System 36 Handicap = 36 - 23 = 13
+    - If gross score is 90, net score = 90 - 13 = 77
 
-- Net score = Gross score - System 36 Handicap
-- Higher points win
+- Net score = Gross score - System 36 Handicap (applied after full round)
+- Higher total points win
 
 Formula:
-- Points per Hole = f(net_strokes, par)
+- Points per Hole = f(gross_strokes, par)
+  * Par or better (gross ≤ par): 2 points
+  * Bogey (gross = par + 1): 1 point
+  * Double bogey or worse (gross ≥ par + 2): 0 points
 - Total Points = Sum of all hole points
-- System 36 HCP = 36 - (Total Points / Holes Played) × 18
-- Net Score = Gross Score - System 36 HCP
+- System 36 Handicap = 36 - Total Points (18 holes only)
+- Net Score = Gross Score - System 36 Handicap
 - Winner = Highest total points
+
+Example Round:
+- 7 pars × 2 = 14 points
+- 9 bogeys × 1 = 9 points
+- 2 doubles × 0 = 0 points
+- Total = 23 points, Handicap = 36 - 23 = 13
 """
 
 from typing import Tuple
@@ -48,25 +57,35 @@ class System36ScoringStrategy(ScoringStrategy):
     def calculate_system36_points(
         self,
         strokes: int,
-        par: int,
-        handicap_strokes: int
+        par: int
     ) -> int:
         """
-        Calculate classic System 36 points for a hole (2/1/0)
+        Calculate official System 36 points for a hole (2/1/0)
 
-        Rules (using net vs par):
-        - Par or better: 2 points
-        - Bogey (+1): 1 point
-        - Double bogey or worse (>= +2): 0 points
+        Official Rules (using GROSS score vs par):
+        - Par or better (gross ≤ par): 2 points
+        - Bogey (gross = par + 1): 1 point
+        - Double bogey or worse (gross ≥ par + 2): 0 points
+
+        Args:
+            strokes: Gross strokes on the hole
+            par: Par for the hole
+
+        Returns:
+            Points earned (0, 1, or 2)
+
+        Example:
+            Par 4, Gross 5 (bogey) → 1 point
+            Par 4, Gross 4 (par) → 2 points
+            Par 4, Gross 6 (double) → 0 points
         """
-        net_score = strokes - handicap_strokes
-        score_to_par = net_score - par
+        score_to_par = strokes - par
 
-        if score_to_par <= 0:
+        if score_to_par <= 0:  # Par or better
             return 2
-        elif score_to_par == 1:
+        elif score_to_par == 1:  # Bogey
             return 1
-        else:
+        else:  # Double bogey or worse
             return 0
 
     def update_scorecard(
@@ -78,42 +97,36 @@ class System36ScoringStrategy(ScoringStrategy):
         """
         Update scorecard for System 36
 
-        Calculate handicap strokes for this hole, determine points,
-        and set both points and net score.
+        Calculate points based on GROSS score vs par.
+        Note: System 36 handicap is calculated after the full round,
+        not applied per hole.
 
         Args:
             scorecard: Scorecard with strokes already set
-            participant: Participant with declared handicap
-            hole: Hole with par and difficulty index
+            participant: Participant (not used for System 36 per-hole calculation)
+            hole: Hole with par
 
         Returns:
-            Updated scorecard with points and net_score
+            Updated scorecard with points
         """
-        # Calculate handicap strokes for this specific hole
-        handicap_strokes = self.calculate_handicap_strokes_for_hole(
-            declared_handicap=participant.declared_handicap,
-            hole_index=hole.stroke_index,
-            num_holes=18
-        )
-
-        # Calculate System 36 points
+        # Calculate System 36 points based on GROSS score
         points = self.calculate_system36_points(
             strokes=scorecard.strokes,
-            par=hole.par,
-            handicap_strokes=handicap_strokes
+            par=hole.par
         )
 
         # Set points (primary scoring metric)
         scorecard.points = points
 
-        # Set net score (for display/reference)
-        scorecard.net_score = int(scorecard.strokes - handicap_strokes)
+        # Net score is not applicable per hole in System 36
+        # It's calculated after the full round: Gross - (36 - Total Points)
+        # Set to gross strokes as placeholder to satisfy NOT NULL constraint
+        scorecard.net_score = scorecard.strokes
 
         logger.debug(
-            f"System 36: Participant {participant.id} (HCP {participant.declared_handicap}), "
-            f"Hole {hole.number} (Par {hole.par}, Index {hole.stroke_index}), "
-            f"Gross {scorecard.strokes}, Handicap Strokes {handicap_strokes}, "
-            f"Net {scorecard.net_score}, Points {points}"
+            f"System 36: Participant {participant.id}, "
+            f"Hole {hole.number} (Par {hole.par}), "
+            f"Gross {scorecard.strokes}, Points {points}"
         )
 
         return scorecard

@@ -8,11 +8,16 @@ export interface WinnerResult {
   participant_name: string;
   division?: string;
   division_id?: number;
-  overall_rank: number;
+  overall_rank?: number;  // Optional - division winners may not have overall rank
   division_rank?: number;
   gross_score: number;
   net_score?: number;
-  handicap: number;
+  declared_handicap: number;
+  course_handicap: number;
+  system36_handicap?: number;  // System 36 calculated handicap (36 - total points)
+  teebox_name?: string;
+  teebox_course_rating?: number;
+  teebox_slope_rating?: number;
   is_tied: boolean;
   tied_with?: {
     participant_ids: string[];
@@ -30,6 +35,7 @@ export interface WinnerResult {
 export interface WinnersListResponse {
   event_id: number;
   event_name: string;
+  scoring_type: string;  // Event scoring type (stroke, net_stroke, system_36, stableford)
   total_winners: number;
   winners: WinnerResult[];
 }
@@ -106,4 +112,41 @@ export const formatTieInformation = (winner: WinnerResult): string => {
   }
 
   return 'Tied';
+};
+
+export const exportParticipantScores = async (eventId: number): Promise<void> => {
+  try {
+    const response = await api.get(`/winners/${eventId}/export`, {
+      responseType: 'blob',
+    });
+
+    // Create blob URL and trigger download
+    const blob = new Blob([response.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    
+    // Extract filename from response headers or use default
+    const contentDisposition = response.headers['content-disposition'];
+    let filename = `Event_${eventId}_Scores.xlsx`;
+    
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+      if (filenameMatch) {
+        filename = filenameMatch[1];
+      }
+    }
+    
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Error exporting participant scores:', error);
+    throw new Error('Failed to export participant scores');
+  }
 };

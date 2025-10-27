@@ -15,7 +15,7 @@ interface EventListProps {
 
 const EventList: React.FC<EventListProps> = ({ onEditEvent, onRefresh }) => {
   const navigate = useNavigate();
-  const { canManageParticipants, canManageScores } = usePermissions();
+  const { canManageParticipants, canManageScores, canEditEvent } = usePermissions();
   const { confirm } = useConfirm();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
@@ -231,6 +231,7 @@ const EventList: React.FC<EventListProps> = ({ onEditEvent, onRefresh }) => {
                     }}
                     variant="outline"
                     className="flex-1 border-blue-300 text-blue-600 hover:bg-blue-50"
+                    disabled={!canEditEvent(event.id, event)}
                   >
                     Edit
                   </Button>
@@ -241,6 +242,7 @@ const EventList: React.FC<EventListProps> = ({ onEditEvent, onRefresh }) => {
                     }}
                     variant="outline"
                     className="flex-1 border-red-300 text-red-600 hover:bg-red-50"
+                    disabled={!canEditEvent(event.id, event)}
                   >
                     Delete
                   </Button>

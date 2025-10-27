@@ -43,7 +43,7 @@ logger.info("Live scoring service initialized")
 # Add security middleware (order matters!)
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(RateLimitMiddleware, requests_per_minute=100)  # Configurable rate limit
+app.add_middleware(RateLimitMiddleware, requests_per_minute=1000)  # Increased for development (was too restrictive)
 app.add_middleware(ErrorHandlingMiddleware)
 
 # Add CORS middleware

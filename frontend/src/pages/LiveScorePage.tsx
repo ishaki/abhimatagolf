@@ -20,7 +20,7 @@ import { tokenStorage } from '@/utils/tokenStorage';
 // Easy configuration for auto-scroll behavior
 const AUTO_SCROLL_CONFIG = {
   SCROLL_INTERVAL_MS: 7000,  // How fast to scroll (in milliseconds) - 7000 = 7 seconds
-  ROW_HEIGHT_PX: 45,          // Estimated height of each row in pixels
+  ROWS_PER_PAGE: 10,          // Show exactly 10 records per page
 };
 // ================================================
 
@@ -139,11 +139,11 @@ const LiveScorePage: React.FC = () => {
       return;
     }
 
-    // Calculate how many rows fit in viewport based on configuration
-    const rowsPerPage = Math.floor(window.innerHeight / AUTO_SCROLL_CONFIG.ROW_HEIGHT_PX);
+    // Use fixed rows per page from configuration
+    const rowsPerPage = AUTO_SCROLL_CONFIG.ROWS_PER_PAGE;
     const totalRows = scorecards.length;
 
-    // If all rows fit in viewport, no need to scroll
+    // If all rows fit in one page, no need to scroll
     if (totalRows <= rowsPerPage) {
       if (autoScrollIntervalRef.current) {
         clearInterval(autoScrollIntervalRef.current);
@@ -152,7 +152,7 @@ const LiveScorePage: React.FC = () => {
       return;
     }
 
-    // Start auto-scroll - scroll by page
+    // Start auto-scroll - scroll by page (exactly 10 records at a time)
     autoScrollIntervalRef.current = setInterval(() => {
       setCurrentScrollIndex((prev) => {
         // Move to next page (jump by rowsPerPage)
@@ -330,9 +330,9 @@ const LiveScorePage: React.FC = () => {
               <h1 className="text-3xl font-bold text-blue-900 tracking-tight">
                 {scorecards[0]?.event_name || 'Live Score'}
               </h1>
-              {isAutoScrolling && scorecards.length > Math.floor(window.innerHeight / AUTO_SCROLL_CONFIG.ROW_HEIGHT_PX) && (
+              {isAutoScrolling && scorecards.length > AUTO_SCROLL_CONFIG.ROWS_PER_PAGE && (
                 <span className="px-2 py-1 bg-blue-200 text-blue-800 text-xs font-medium rounded-full animate-pulse">
-                  Auto-scrolling (by page)
+                  Auto-scrolling (10 records/page)
                 </span>
               )}
             </div>
@@ -422,57 +422,57 @@ const LiveScorePage: React.FC = () => {
         {scorecards.length > 0 ? (
           <div className="h-full border rounded-lg shadow-sm bg-white overflow-auto" ref={tableBodyRef}>
             <table className="w-full text-sm border-collapse table-fixed">
-              <thead className="sticky top-0 z-10 bg-gradient-to-r from-gray-50 via-gray-25 to-gray-50 text-gray-700 border-gray-200">
+              <thead className="sticky top-0 z-10 bg-gray-200 text-gray-800 border-gray-400 shadow-sm">
                 {/* Header Row 1: Hole Numbers */}
                 <tr>
-                  <th className="border border-gray-200 px-3 py-2 text-center font-semibold w-16">
+                  <th className="border border-gray-400 px-3 py-2 text-center font-semibold w-16 bg-gray-200">
                     No
                   </th>
-                  <th className="border border-gray-200 px-4 py-2 text-left font-semibold w-48">
+                  <th className="border border-gray-400 px-4 py-2 text-left font-semibold w-48 bg-gray-200">
                     Player / Hole No.
                   </th>
                   {allHoles.slice(0, 9).map((hole) => (
-                    <th key={hole.hole_number} className="border border-gray-200 px-1 py-2 text-center font-semibold w-12">
+                    <th key={hole.hole_number} className="border border-gray-400 px-1 py-2 text-center font-semibold w-12 bg-gray-200">
                       {hole.hole_number}
                     </th>
                   ))}
-                  <th className="border border-gray-200 px-3 py-2 text-center font-semibold bg-gray-100 w-16">
+                  <th className="border border-gray-400 px-3 py-2 text-center font-semibold bg-gray-300 w-16">
                     Out
                   </th>
                   {allHoles.slice(9, 18).map((hole) => (
-                    <th key={hole.hole_number} className="border border-gray-200 px-1 py-2 text-center font-semibold w-12">
+                    <th key={hole.hole_number} className="border border-gray-400 px-1 py-2 text-center font-semibold w-12 bg-gray-200">
                       {hole.hole_number}
                     </th>
                   ))}
-                  <th className="border border-gray-200 px-3 py-2 text-center font-semibold bg-gray-100 w-16">
+                  <th className="border border-gray-400 px-3 py-2 text-center font-semibold bg-gray-300 w-16">
                     In
                   </th>
-                  <th className="border border-gray-200 px-3 py-2 text-center font-semibold w-20">
+                  <th className="border border-gray-400 px-3 py-2 text-center font-semibold bg-gray-200 w-20">
                     Total
                   </th>
                 </tr>
                 {/* Header Row 2: Par & Index */}
-                <tr className="text-xs">
-                  <td className="border border-gray-200 px-3 py-2"></td>
-                  <td className="border border-gray-200 px-4 py-2"></td>
+                <tr className="text-xs bg-gray-200">
+                  <td className="border border-gray-400 px-3 py-2 bg-gray-200"></td>
+                  <td className="border border-gray-400 px-4 py-2 bg-gray-200"></td>
                   {/* Front 9 Par/Index */}
                   {allHoles.slice(0, 9).map((hole) => (
-                    <td key={`par-${hole.hole_number}`} className="border border-gray-200 px-1 py-1 text-center">
+                    <td key={`par-${hole.hole_number}`} className="border border-gray-400 px-1 py-1 text-center bg-gray-200">
                       <div className="font-medium">Par {hole.hole_par}</div>
                     </td>
                   ))}
                   {/* Out column - no par info */}
-                  <td className="border border-gray-200 px-3 py-1 bg-gray-100"></td>
+                  <td className="border border-gray-400 px-3 py-1 bg-gray-300"></td>
                   {/* Back 9 Par/Index */}
                   {allHoles.slice(9, 18).map((hole) => (
-                    <td key={`par-${hole.hole_number}`} className="border border-gray-200 px-1 py-1 text-center">
+                    <td key={`par-${hole.hole_number}`} className="border border-gray-400 px-1 py-1 text-center bg-gray-200">
                       <div className="font-medium">Par {hole.hole_par}</div>
                     </td>
                   ))}
                   {/* In column - no par info */}
-                  <td className="border border-gray-200 px-3 py-1 bg-gray-100"></td>
+                  <td className="border border-gray-400 px-3 py-1 bg-gray-300"></td>
                   {/* Total column - no par info */}
-                  <td className="border border-gray-200 px-3 py-1"></td>
+                  <td className="border border-gray-400 px-3 py-1 bg-gray-200"></td>
                 </tr>
               </thead>
               <tbody>

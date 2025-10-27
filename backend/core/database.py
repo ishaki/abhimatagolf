@@ -13,6 +13,10 @@ engine = create_engine(
 
 def create_db_and_tables():
     """Create database tables"""
+    # Import all models to ensure they are registered with SQLModel
+    # This must be done before create_all() is called
+    import models  # This imports all models from models/__init__.py
+
     SQLModel.metadata.create_all(engine)
 
 

@@ -80,6 +80,295 @@ class ExcelService:
             logger.error(f"Error exporting participants to Excel: {str(e)}")
             raise
 
+    def export_participant_scores_detailed(self, event_id: int) -> BytesIO:
+        """
+        Export detailed participant scores to Excel with three sheets:
+        1. Scores: Participant, Hole 1-9, Total Out, Hole 10-18, Total In, Total (showing scores)
+        2. Points: Participant, Hole 1-9, Total Out, Hole 10-18, Total In, Total Point (showing System 36 points)
+        3. Summary: Participant, Declared Hcp, Course Handicap, Total Gross, Nett, Total Point
+        
+        Note: For System 36 events, the Course Handicap column shows System 36 Handicap (36 - Total Points),
+        and Nett is calculated as Total Gross - System 36 Handicap.
+        For other events, Nett = Total Gross - Course Handicap.
+        """
+        try:
+            from models.event import Event, ScoringType
+            from models.participant import Participant
+            from models.scorecard import Scorecard
+            from models.course import Hole
+            from models.event_division import EventDivision
+            from services.scoring_strategies.system36 import System36ScoringStrategy
+            
+            # Get event
+            event = self.session.get(Event, event_id)
+            if not event:
+                raise ValueError(f"Event {event_id} not found")
+            
+            # Get all participants for the event
+            participants_query = select(Participant).where(Participant.event_id == event_id)
+            participants = list(self.session.exec(participants_query).all())
+            
+            if not participants:
+                raise ValueError(f"No participants found for event {event_id}")
+            
+            # Get all holes for the course
+            holes_query = select(Hole).where(Hole.course_id == event.course_id).order_by(Hole.number)
+            holes = list(self.session.exec(holes_query).all())
+            
+            # Get divisions for participant lookup
+            divisions_query = select(EventDivision).where(EventDivision.event_id == event_id)
+            divisions = list(self.session.exec(divisions_query).all())
+            division_map = {div.id: div for div in divisions}
+            
+            # Create Excel file in memory
+            output = BytesIO()
+            
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                # Prepare data for all three sheets
+                scores_data = []
+                points_data = []
+                summary_data = []
+                
+                # Initialize System 36 strategy if needed
+                system36_strategy = None
+                if event.scoring_type == ScoringType.SYSTEM_36:
+                    system36_strategy = System36ScoringStrategy()
+                
+                for participant in participants:
+                    # Get all scorecards for this participant
+                    scorecards_query = select(Scorecard).where(Scorecard.participant_id == participant.id)
+                    scorecards = list(self.session.exec(scorecards_query).all())
+                    
+                    # Create mapping of hole_id to scorecard
+                    scorecard_map = {sc.hole_id: sc for sc in scorecards}
+                    
+                    # Get division name
+                    division_name = participant.division
+                    if participant.division_id and participant.division_id in division_map:
+                        division_name = division_map[participant.division_id].name
+                    
+                    # Initialize row data for Sheet 1 (Scores)
+                    scores_row = {
+                        'Participant': participant.name
+                    }
+                    
+                    # Initialize row data for Sheet 2 (Points)
+                    points_row = {
+                        'Participant': participant.name
+                    }
+                    
+                    # Process each hole and calculate totals
+                    total_gross = 0
+                    total_points = 0
+                    out_total = 0  # Front 9 (holes 1-9)
+                    in_total = 0   # Back 9 (holes 10-18)
+                    out_points = 0
+                    in_points = 0
+                    
+                    # First pass: calculate totals
+                    for hole in holes:
+                        scorecard = scorecard_map.get(hole.id)
+                        strokes = scorecard.strokes if scorecard and scorecard.strokes > 0 else 0
+                        
+                        if strokes > 0:
+                            total_gross += strokes
+                            # Add to front/back nine scores
+                            if hole.number <= 9:
+                                out_total += strokes
+                            else:
+                                in_total += strokes
+                        
+                        # Calculate points for System 36
+                        if event.scoring_type == ScoringType.SYSTEM_36 and system36_strategy and strokes > 0:
+                            points = system36_strategy.calculate_system36_points(strokes, hole.par)
+                            total_points += points
+                            
+                            # Add to front/back nine points
+                            if hole.number <= 9:
+                                out_points += points
+                            else:
+                                in_points += points
+                    
+                    # Second pass: build rows with proper column order for Sheet 1 (Scores)
+                    # Front 9 holes (1-9) - Column names: "Hole 1" through "Hole 9"
+                    for hole in holes:
+                        if hole.number <= 9:
+                            scorecard = scorecard_map.get(hole.id)
+                            strokes = scorecard.strokes if scorecard and scorecard.strokes > 0 else 0
+                            scores_row[f'Hole {hole.number}'] = strokes if strokes > 0 else ''
+                    
+                    # Out subtotal
+                    scores_row['Total Out'] = out_total if out_total > 0 else ''
+                    
+                    # Back 9 holes (10-18) - Column names: "Hole 10" through "Hole 18"
+                    for hole in holes:
+                        if hole.number > 9:
+                            scorecard = scorecard_map.get(hole.id)
+                            strokes = scorecard.strokes if scorecard and scorecard.strokes > 0 else 0
+                            scores_row[f'Hole {hole.number}'] = strokes if strokes > 0 else ''
+                    
+                    # In subtotal
+                    scores_row['Total In'] = in_total if in_total > 0 else ''
+                    
+                    # Total
+                    scores_row['Total'] = total_gross if total_gross > 0 else ''
+                    
+                    # Build rows for Sheet 2 (Points) - System 36 only
+                    if event.scoring_type == ScoringType.SYSTEM_36:
+                        # Front 9 holes points (1-9) - Column names: "Hole 1" through "Hole 9"
+                        for hole in holes:
+                            if hole.number <= 9:
+                                scorecard = scorecard_map.get(hole.id)
+                                strokes = scorecard.strokes if scorecard and scorecard.strokes > 0 else 0
+                                if strokes > 0 and system36_strategy:
+                                    points = system36_strategy.calculate_system36_points(strokes, hole.par)
+                                    points_row[f'Hole {hole.number}'] = points
+                                else:
+                                    points_row[f'Hole {hole.number}'] = ''
+                        
+                        # Out subtotal
+                        points_row['Total Out'] = out_points if out_total > 0 else ''
+                        
+                        # Back 9 holes points (10-18) - Column names: "Hole 10" through "Hole 18"
+                        for hole in holes:
+                            if hole.number > 9:
+                                scorecard = scorecard_map.get(hole.id)
+                                strokes = scorecard.strokes if scorecard and scorecard.strokes > 0 else 0
+                                if strokes > 0 and system36_strategy:
+                                    points = system36_strategy.calculate_system36_points(strokes, hole.par)
+                                    points_row[f'Hole {hole.number}'] = points
+                                else:
+                                    points_row[f'Hole {hole.number}'] = ''
+                        
+                        # In subtotal
+                        points_row['Total In'] = in_points if in_total > 0 else ''
+                        
+                        # Total Point
+                        points_row['Total Point'] = total_points if total_gross > 0 else ''
+                    else:
+                        # For non-System 36 events, still create the structure but leave empty
+                        for hole in holes:
+                            if hole.number <= 9:
+                                points_row[f'Hole {hole.number}'] = ''
+                        points_row['Total Out'] = ''
+                        for hole in holes:
+                            if hole.number > 9:
+                                points_row[f'Hole {hole.number}'] = ''
+                        points_row['Total In'] = ''
+                        points_row['Total Point'] = ''
+                    
+                    # Calculate Nett score based on scoring type
+                    if event.scoring_type == ScoringType.SYSTEM_36:
+                        # For System 36: Nett = Total Gross - System 36 Handicap
+                        # System 36 Handicap = 36 - Total Points (only if 18 holes completed)
+                        holes_completed = sum(1 for hole in holes if scorecard_map.get(hole.id) and scorecard_map.get(hole.id).strokes > 0)
+                        if holes_completed >= 18:
+                            system36_handicap = 36 - total_points
+                            nett_score = total_gross - system36_handicap if total_gross > 0 else ''
+                            course_handicap = system36_handicap
+                        else:
+                            # Incomplete round - can't calculate System 36 handicap
+                            course_handicap = participant.course_handicap
+                            nett_score = ''
+                    else:
+                        # For other scoring types: Nett = Total Gross - Course Handicap
+                        course_handicap = participant.course_handicap
+                        nett_score = total_gross - course_handicap if total_gross > 0 else ''
+                    
+                    # Build row for Sheet 3 (Summary) - ordered columns
+                    summary_row_ordered = {
+                        'Participant': participant.name,
+                        'Declared Hcp': participant.declared_handicap,
+                        'Course Handicap': course_handicap if total_gross > 0 else '',
+                        'Total Gross': total_gross if total_gross > 0 else '',
+                        'Nett': nett_score if isinstance(nett_score, int) or isinstance(nett_score, float) else '',
+                        'Total Point': total_points if event.scoring_type == ScoringType.SYSTEM_36 and total_gross > 0 else ''
+                    }
+                    
+                    scores_data.append(scores_row)
+                    points_data.append(points_row)
+                    summary_data.append(summary_row_ordered)
+                
+                # Create Sheet 1: Scores
+                scores_df = pd.DataFrame(scores_data)
+                scores_df.to_excel(writer, sheet_name='Scores', index=False)
+                
+                # Create Sheet 2: Points
+                points_df = pd.DataFrame(points_data)
+                points_df.to_excel(writer, sheet_name='Points', index=False)
+                
+                # Create Sheet 3: Summary
+                summary_df = pd.DataFrame(summary_data)
+                summary_df.to_excel(writer, sheet_name='Summary', index=False)
+                
+                # Add note to Sheet 3 (Summary) about Course Handicap calculation
+                summary_worksheet = writer.sheets['Summary']
+                max_row = len(summary_data) + 1  # +1 for header row
+                
+                # Add empty row
+                summary_worksheet[f'A{max_row + 2}'] = "Note:"
+                note_cell = summary_worksheet[f'A{max_row + 2}']
+                note_cell.font = Font(bold=True, color="0000FF")
+                
+                # Add note text explaining handicap calculation (depends on scoring type)
+                if event.scoring_type == ScoringType.SYSTEM_36:
+                    note_text = "System 36 Handicap = 36 - Total Points (calculated from your performance)"
+                    explanation_text = "In System 36, your handicap is derived from your total points. Lower points result in higher handicap, and vice versa."
+                else:
+                    note_text = "Course Handicap = (Declared Handicap × Teebox Slope Rating) / 113"
+                    explanation_text = "Course Handicap adjusts your declared handicap based on the difficulty of the teebox you're playing from."
+                
+                summary_worksheet[f'A{max_row + 3}'] = note_text
+                note_text_cell = summary_worksheet[f'A{max_row + 3}']
+                note_text_cell.font = Font(italic=True, color="666666")
+                
+                summary_worksheet[f'A{max_row + 4}'] = explanation_text
+                explanation_cell = summary_worksheet[f'A{max_row + 4}']
+                explanation_cell.font = Font(italic=True, color="666666")
+                
+                # Add empty row before Nett calculation note
+                summary_worksheet[f'A{max_row + 6}'] = "Nett Calculation:"
+                nett_note_cell = summary_worksheet[f'A{max_row + 6}']
+                nett_note_cell.font = Font(bold=True, color="0000FF")
+                
+                # Add note text explaining Nett calculation
+                if event.scoring_type == ScoringType.SYSTEM_36:
+                    nett_formula = "Nett = Total Gross - System 36 Handicap (where System 36 Handicap = 36 - Total Points)"
+                    nett_explanation_text = "In System 36, your handicap is calculated from your total points (36 - Total Points). Nett shows your adjusted performance."
+                else:
+                    nett_formula = "Nett = Total Gross - Course Handicap"
+                    nett_explanation_text = "Nett score is your gross score minus your course handicap, showing your adjusted performance level."
+                
+                summary_worksheet[f'A{max_row + 7}'] = nett_formula
+                nett_formula_cell = summary_worksheet[f'A{max_row + 7}']
+                nett_formula_cell.font = Font(italic=True, color="666666")
+                
+                summary_worksheet[f'A{max_row + 8}'] = nett_explanation_text
+                nett_explanation_cell = summary_worksheet[f'A{max_row + 8}']
+                nett_explanation_cell.font = Font(italic=True, color="666666")
+                
+                # Auto-adjust column widths
+                for sheet_name in writer.sheets:
+                    worksheet = writer.sheets[sheet_name]
+                    for column in worksheet.columns:
+                        max_length = 0
+                        column_letter = column[0].column_letter
+                        for cell in column:
+                            try:
+                                if len(str(cell.value)) > max_length:
+                                    max_length = len(str(cell.value))
+                            except:
+                                pass
+                        adjusted_width = min(max_length + 2, 20)
+                        worksheet.column_dimensions[column_letter].width = adjusted_width
+            
+            output.seek(0)
+            return output
+            
+        except Exception as e:
+            logger.error(f"Error in export_participant_scores_detailed: {str(e)}")
+            raise
+
     def export_scorecards_to_excel(self, event_id: int) -> BytesIO:
         """Export scorecards for an event to Excel format."""
         try:
@@ -224,7 +513,7 @@ class ExcelService:
                 divisions = self.session.exec(
                     select(EventDivision).where(EventDivision.event_id == event_id)
                 ).all()
-                divisions_list = [(div.id, div.name, div.min_handicap, div.max_handicap) for div in divisions]
+                divisions_list = [(div.id, div.name, div.handicap_min, div.handicap_max) for div in divisions]
 
             # Create Excel file in memory
             output = BytesIO()

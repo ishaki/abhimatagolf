@@ -43,7 +43,7 @@ export default function LoginForm() {
                 </svg>
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                Abhimata Golf Event
+                Abhimata Golf Management
               </h2>
               <p className="text-sm text-gray-600">
                 Sign in to your account

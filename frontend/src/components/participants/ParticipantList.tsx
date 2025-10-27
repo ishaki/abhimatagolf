@@ -12,15 +12,18 @@ import { eventDivisionService, EventDivision } from '@/services/eventDivisionSer
 import { toast } from 'sonner';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useConfirm } from '@/hooks/useConfirm';
+import { getCountryFlag } from '@/utils/countryUtils';
 
 interface ParticipantListProps {
   eventId?: number;
+  event?: any; // Add event data for permission checking
   onEditParticipant: (participant: Participant) => void;
   onRefresh: () => void;
 }
 
 const ParticipantList: React.FC<ParticipantListProps> = ({
   eventId,
+  event,
   onEditParticipant,
   onRefresh,
 }) => {
@@ -40,6 +43,7 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [divisions, setDivisions] = useState<EventDivision[]>([]);
   const [loadingDivisions, setLoadingDivisions] = useState(false);
+  const [assigningSubdivisions, setAssigningSubdivisions] = useState(false);
 
   // Initialize search term from filters
   useEffect(() => {
@@ -57,7 +61,7 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
 
   const loadDivisions = async () => {
     if (!eventId) return;
-    
+
     try {
       setLoadingDivisions(true);
       const eventDivisions = await eventDivisionService.getDivisionsForEvent(eventId);
@@ -68,6 +72,43 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
     } finally {
       setLoadingDivisions(false);
     }
+  };
+
+  const handleAutoAssignSubdivisions = async () => {
+    if (!eventId) return;
+
+    try {
+      setAssigningSubdivisions(true);
+      const result = await eventDivisionService.autoAssignSubdivisions(eventId);
+
+      toast.success(
+        `Auto-assigned ${result.assigned} participants to sub-divisions. ${result.skipped} skipped.`
+      );
+
+      if (result.errors.length > 0) {
+        console.warn('Assignment errors:', result.errors);
+      }
+
+      // Reload participants and divisions
+      loadParticipants();
+      loadDivisions();
+      onRefresh();
+    } catch (error: any) {
+      console.error('Error auto-assigning sub-divisions:', error);
+      const errorMessage = error.response?.data?.detail || 'Failed to auto-assign participants';
+      toast.error(errorMessage);
+    } finally {
+      setAssigningSubdivisions(false);
+    }
+  };
+
+  const canAutoAssignSubdivisions = () => {
+    if (!event) return false;
+    // Can auto-assign for Net Stroke and System 36 Modified
+    return (
+      event.scoring_type === 'net_stroke' ||
+      (event.scoring_type === 'system_36' && event.system36_variant === 'modified')
+    );
   };
 
   const loadParticipants = async () => {
@@ -208,55 +249,67 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
               <option value="50">50/page</option>
               <option value="100">100/page</option>
             </select>
+
+            {/* Auto-Assign Sub-Divisions Button */}
+            {canAutoAssignSubdivisions() && canManageParticipants(eventId, event) && (
+              <Button
+                onClick={handleAutoAssignSubdivisions}
+                disabled={assigningSubdivisions}
+                className="bg-purple-500 hover:bg-purple-600 text-white h-10"
+                size="sm"
+              >
+                {assigningSubdivisions ? 'Assigning...' : 'Auto-Assign Sub-Divisions'}
+              </Button>
+            )}
           </div>
         </div>
       </div>
 
       {/* Participants Table */}
-      <Card>
+      <Card className="shadow-sm border-0 overflow-hidden">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b">
+            <table className="w-full min-w-[800px]">
+              <thead className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wide">
                     Name
                   </th>
                   {!eventId && (
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wide">
                       Event
                     </th>
                   )}
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wide">
                     Handicap
                   </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wide">
                     Division
                   </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wide">
                     Country
                   </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wide">
                     Sex
                   </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wide">
                     Event Status
                   </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wide">
                     Event Description
                   </th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wide">
                     Scorecards
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700 uppercase tracking-wide">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-white divide-y divide-gray-100">
                 {participants.map((participant) => (
-                  <tr key={participant.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 whitespace-nowrap">
+                  <tr key={participant.id} className="hover:bg-gray-50 transition-colors duration-150">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div>
                           <div className="text-sm font-medium text-gray-900">
@@ -266,24 +319,51 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
                       </div>
                     </td>
                     {!eventId && (
-                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {participant.event_name || `Event #${participant.event_id}`}
                       </td>
                     )}
-                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {participant.declared_handicap.toFixed(0)}
                     </td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                      {participant.division || '-'}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {participant.division ? (
+                        <div className="flex flex-col">
+                          <span className="text-gray-900 font-medium">{participant.division}</span>
+                          {participant.division_id && divisions.find(d => d.id === participant.division_id)?.parent_division_id && (
+                            <span className="text-xs text-blue-600">Sub-Division</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
                     </td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                      {participant.country || '-'}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {participant.country ? (
+                        <div className="flex items-center space-x-2">
+                          {(() => {
+                            const flagEmoji = getCountryFlag(participant.country);
+                            return flagEmoji ? (
+                              <span className="text-lg" title={participant.country}>
+                                {flagEmoji}
+                              </span>
+                            ) : (
+                              <div className="w-5 h-3.5 bg-gray-200 rounded-sm flex items-center justify-center">
+                                <span className="text-xs text-gray-500">?</span>
+                              </div>
+                            );
+                          })()}
+                          <span>{participant.country}</span>
+                        </div>
+                      ) : (
+                        '-'
+                      )}
                     </td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {participant.sex || '-'}
                     </td>
-                    <td className="px-4 py-2 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
                         participant.event_status === 'Ok' ? 'bg-green-100 text-green-800' :
                         participant.event_status === 'No Show' ? 'bg-yellow-100 text-yellow-800' :
                         participant.event_status === 'Disqualified' ? 'bg-red-100 text-red-800' :
@@ -292,20 +372,20 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
                         {participant.event_status || 'Ok'}
                       </span>
                     </td>
-                    <td className="px-4 py-2 text-sm text-gray-900 max-w-xs truncate" title={participant.event_description || ''}>
+                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title={participant.event_description || ''}>
                       {participant.event_description || '-'}
                     </td>
-                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {participant.scorecard_count || 0}
                     </td>
-                    <td className="px-4 py-2 whitespace-nowrap text-right text-sm font-medium">
-                      {canManageParticipants(eventId) && (
-                        <div className="flex items-center justify-end space-x-1">
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      {canManageParticipants(eventId, event) && (
+                        <div className="flex items-center justify-end space-x-2">
                           <Button
                             onClick={() => onEditParticipant(participant)}
                             size="sm"
                             variant="outline"
-                            className="text-xs px-2 py-1 h-7"
+                            className="text-xs px-3 py-1 h-7 border-gray-300 text-gray-700 hover:bg-gray-50"
                           >
                             Edit
                           </Button>
@@ -315,7 +395,7 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
                             }
                             size="sm"
                             variant="outline"
-                            className="text-xs px-2 py-1 h-7 border-red-300 text-red-600 hover:bg-red-50"
+                            className="text-xs px-3 py-1 h-7 border-red-300 text-red-600 hover:bg-red-50"
                           >
                             Delete
                           </Button>
@@ -330,7 +410,7 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
 
           {/* Empty State */}
           {participants.length === 0 && !loading && (
-            <div className="text-center py-12">
+            <div className="text-center py-16 bg-gray-50/50">
               <svg
                 className="mx-auto h-16 w-16 text-gray-400"
                 fill="none"
@@ -344,10 +424,10 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
                   d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
                 />
               </svg>
-              <h3 className="mt-2 text-sm font-medium text-gray-900">
+              <h3 className="mt-4 text-lg font-medium text-gray-900">
                 No participants found
               </h3>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-2 text-sm text-gray-500">
                 {filters.search
                   ? 'Try adjusting your search filters.'
                   : 'Get started by adding participants.'}

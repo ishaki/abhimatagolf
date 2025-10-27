@@ -113,17 +113,17 @@ async def create_user(
     # Create new user
     hashed_password = get_password_hash(user_data.password)
     user = User(
-        name=user_data.name,
+        full_name=user_data.full_name,
         email=user_data.email,
-        password_hash=hashed_password,
+        hashed_password=hashed_password,
         role=user_data.role,
         is_active=user_data.is_active
     )
-    
+
     session.add(user)
     session.commit()
     session.refresh(user)
-    
+
     return UserResponse.model_validate(user, from_attributes=True)
 
 
@@ -347,6 +347,62 @@ async def get_event_users(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get event users"
+        )
+
+
+@router.put("/event/{event_id}/user/{user_id}/access")
+async def update_user_event_access(
+    event_id: int,
+    user_id: int,
+    access_data: dict,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_super_admin())
+):
+    """Update a user's access level for an event - SUPER_ADMIN only"""
+    
+    # Check if current user has access to the event
+    from core.permissions import can_access_event
+    if not can_access_event(current_user, event_id, session):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have access to this event"
+        )
+    
+    # Validate access level
+    from models.user_event import AccessLevel
+    access_level = access_data.get('access_level')
+    if access_level not in [level.value for level in AccessLevel]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid access level. Must be one of: {[level.value for level in AccessLevel]}"
+        )
+    
+    try:
+        # Create user service
+        user_service = create_user_service(session)
+        
+        # Update user access level
+        success = user_service.update_user_event_access(
+            user_id=user_id,
+            event_id=event_id,
+            access_level=AccessLevel(access_level),
+            updater_user=current_user
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found in this event"
+            )
+        
+        return {"message": f"User access level updated to {access_level} successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update user access level"
         )
 
 

@@ -155,6 +155,7 @@
 - Accessible to Event Admin and Event User.
 - **Stores raw strokes only** - NO calculations performed during score entry.
 - Score input validation (numeric, within reasonable range).
+- **Optimistic UI Updates**: Score updates instantly without page reload, preserving search filters and user context.
 - Real-time WebSocket broadcast on save to update Live Score page.
 - **Performance optimized**: Score entry is 5-10x faster without calculation overhead.
 
@@ -205,43 +206,75 @@
 
 ### 5.7 Winner Page (Calculation & Results Display)
 
-**Purpose**: Admin-only page to calculate final results and display winners.
+**Purpose**: Public-facing page to display tournament winners in a comprehensive table format.
 
 **Pre-Calculation State**:
-- Shows message: "No results yet - Click 'Calculate Result' to determine winners"
-- "Calculate Result" button (accessible by Super Admin and Event Admin only)
+- Shows message: "No Winners Yet - Winners need to be calculated before they can be displayed"
+- Trophy icon with explanatory text
+- Refresh button to reload data
 
 **Calculation Process**:
-- **Manual Trigger**: Admin clicks "Calculate Result" button
+- **Manual Trigger**: Admin clicks "Calculate Result" button (from Event Detail Page)
 - **Progress Indicator**: Shows "Calculating 45/150 scorecards..." with progress bar
-- **Batch Processing**: Calculates all participants using Strategy Pattern
-  - Gross scores (sum of all strokes)
-  - Net scores (gross - declared handicap, respecting scoring type)
-  - Rankings per division
-  - Overall rankings
-  - Tie-breaking using countback (last 9 → last 6 → last 3 → last hole)
-- **Permanent Storage**: Results stored in database (LeaderboardCache or WinnerResults table)
+- **Batch Processing**: Calculates all participants using Winner Calculation Strategy Pattern
+  - **Strategy Selection**: Factory pattern selects appropriate strategy based on event's scoring type
+  - **Stroke Play Strategy**: Ranks by gross score (ascending), tie-break by back 9 gross
+  - **Net Stroke Strategy**: Ranks by net score (ascending), tie-break by back 9 net
+  - **System 36 Strategy**: Ranks by total points (descending - higher wins), tie-break by back 9 points
+  - **Stableford Strategy** (future): Ranks by total points (descending), tie-break by back 9 points
+  - Rankings per division (top N winners per division based on configuration)
+  - Overall rankings (top N overall based on configuration)
+  - Special Awards: Best Gross Score, Best Net Score (if enabled in configuration)
+  - Tie-breaking using configured method (default: Standard Golf countback)
+- **Permanent Storage**: Results stored in database (WinnerResult table)
 - **Re-calculation**: If scores updated after calculation, shows warning banner: "Scores updated since last calculation - Recalculate to see latest results"
 
-**Post-Calculation Display**:
-- **Overall Awards**:
-  - Best Gross (single winner across all divisions)
-  - Best Net (single winner across all divisions)
-- **Division Winners**:
-  - Top 3 per division with podium display (1st, 2nd, 3rd)
-  - Configurable number of winners per division (EventDivision.num_winners field)
-- **Award Display**:
-  - Participant Name
-  - Division
-  - Gross Score
-  - Net Score
-  - System 36 Points (if applicable)
-  - Rank with tie indicator
+**Architecture: Winner Calculation Strategy Pattern**:
+```
+backend/services/winner_strategies/
+├── base.py                    # WinnerCalculationStrategy (abstract base)
+├── factory.py                 # WinnerStrategyFactory
+├── stroke_winner.py           # StrokeWinnerStrategy (gross scoring)
+├── net_stroke_winner.py       # NetStrokeWinnerStrategy (net scoring)
+└── system36_winner.py         # System36WinnerStrategy (points-based)
+```
+
+**Why Strategy Pattern**:
+- **Separation of Concerns**: Each scoring type has its own calculation logic
+- **Correct Sort Order**: System 36/Stableford use descending (higher wins), Stroke/Net use ascending (lower wins)
+- **Extensibility**: Easy to add new scoring types without modifying existing code
+- **Consistency**: Mirrors the proven architecture of the scoring system
+- **Testability**: Each strategy can be tested independently
+
+**Post-Calculation Display - Multi-Division Table Format**:
+- **Comprehensive Table View**: Shows all divisions simultaneously in a single table
+- **Table Columns**:
+  - Division (sortable)
+  - Declared Handicap (sortable)
+  - Course Handicap (sortable)
+  - Gross Score (sortable)
+  - Net Score (sortable)
+  - Player Name (sortable)
+  - OCB/Tied (tie information)
+- **Visual Design**:
+  - Teal gradient header with event name
+  - Alternating row colors (light blue/blue-100)
+  - Sortable column headers with chevron indicators
+  - Responsive design for mobile/tablet viewing
+- **Data Grouping**: Winners grouped by division, sorted by division rank
+- **Footer**: Shows total winners count and number of divisions
+
+**Features**:
+- **Sorting**: Click any column header to sort by that field
+- **Full Screen**: Toggle button for presentation mode
+- **Refresh**: Manual refresh button to reload latest data
+- **Responsive**: Optimized for tablet and desktop viewing
+- **Public Access**: No authentication required (public tournament results)
 
 **Configuration**:
-- Number of winners per division configurable in EventDivision model
+- Number of winners per division configurable in WinnerConfiguration model
 - Default: 3 winners per division
-- Tie-breaking: Automatic countback method
+- Tie-breaking: Configurable methods (standard golf countback, etc.)
 
 ### 5.8 Reporting & Export
 - Export final leaderboard and scorecards to `.xlsx`.
@@ -395,15 +428,20 @@ erDiagram
 - Responsive auto-fit layout based on screen size
 - Publicly accessible without login
 
-**Winner Page** (New)
-- **Pre-calculation**: "Calculate Result" button with instructions
-- **During calculation**: Progress bar ("Calculating 45/150 scorecards...")
-- **Post-calculation**:
-  - Best Gross and Best Net awards (overall)
-  - Top 3 per division with podium display
-  - Warning banner if scores updated after calculation
-  - Re-calculate button
-- Accessible by Event Admin and Super Admin only
+**Winner Page** (Multi-Division Table Format)
+- **Pre-calculation**: Trophy icon with "No Winners Yet" message and refresh button
+- **Post-calculation**: Comprehensive multi-division table display
+  - Teal gradient header with event name and subtitle
+  - Sortable table columns: Division, Declared Handicap, Course Handicap, Gross, Net, Player Name, OCB/Tied
+  - Alternating row colors (light blue/blue-100) for readability
+  - Sortable column headers with chevron indicators
+  - Footer showing total winners and division count
+- **Features**:
+  - Full-screen toggle for presentation mode
+  - Manual refresh button
+  - Responsive design for tablet/desktop
+  - Public access (no authentication required)
+- **Data Display**: All divisions shown simultaneously, grouped by division, sorted by division rank
 
 **Multilingual Toggle**
 - Language switcher (EN / ID) in header

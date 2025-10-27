@@ -159,3 +159,69 @@ async def bulk_assign_divisions(
 
     return result
 
+
+class MenDivisionAssignmentRequest(BaseModel):
+    """Request for Men division assignment by course handicap"""
+    event_id: int
+
+
+class MenDivisionAssignmentResult(BaseModel):
+    """Result of Men division assignment by course handicap"""
+    total: int
+    assigned: int
+    skipped: int
+    errors: List[dict]
+
+
+@router.post("/assign-men-divisions-by-course-handicap", response_model=MenDivisionAssignmentResult)
+async def assign_men_divisions_by_course_handicap(
+    request: MenDivisionAssignmentRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Assign Men divisions (A/B/C) based on course handicap for System 36 Standard events.
+    
+    This endpoint is specifically for System 36 Standard variant where Men divisions
+    are assigned after teeboxes are assigned and course handicaps are calculated.
+    
+    Workflow:
+    1. Verify event is System 36 Standard
+    2. Find Men divisions configured for course handicap assignment
+    3. Get eligible participants (male, not in Ladies/Senior/VIP)
+    4. Assign based on course handicap ranges
+    5. Return assignment results
+    
+    Requires: Event Admin or Super Admin role
+    """
+    # Check permissions
+    if current_user.role not in ["super_admin", "event_admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions"
+        )
+
+    try:
+        from services.participant_service import ParticipantService
+        
+        participant_service = ParticipantService(session)
+        result = participant_service.assign_men_divisions_by_course_handicap(request.event_id)
+        
+        logger.info(
+            f"Men division assignment completed by {current_user.email} for event {request.event_id}: "
+            f"{result['assigned']} assigned, {result['skipped']} skipped"
+        )
+        
+        return MenDivisionAssignmentResult(**result)
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error during Men division assignment: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to assign Men divisions: {str(e)}"
+        )

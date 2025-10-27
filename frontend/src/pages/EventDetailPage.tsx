@@ -15,14 +15,17 @@ import { eventDivisionService } from '@/services/eventDivisionService';
 import { autoAssignDivisions } from '@/services/divisionAutoAssignService';
 import MultiParticipantScorecard from '@/components/scoring/MultiParticipantScorecard';
 import AddEventUserModal from '@/components/events/AddEventUserModal';
-import { ExternalLink, Trophy, Wand2, Loader2 } from 'lucide-react';
+import EventUserPermissionsModal from '@/components/events/EventUserPermissionsModal';
+import WinnerConfigurationForm from '@/components/winners/WinnerConfigurationForm';
+import SubDivisionConfigurator from '@/components/winners/SubDivisionConfigurator';
+import { ExternalLink, Trophy, Wand2, Loader2, Settings, Target } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useConfirm } from '@/hooks/useConfirm';
 
 const EventDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { canAccessWinners, canCreateEventUsers, canManageParticipants } = usePermissions();
+  const { canAccessWinners, canConfigureWinners, canCreateEventUsers, canManageParticipants, isSuperAdmin } = usePermissions();
   const { confirm } = useConfirm();
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,6 +35,7 @@ const EventDetailPage: React.FC = () => {
   const [editingParticipant, setEditingParticipant] = useState<Participant | undefined>(undefined);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showAddEventUserModal, setShowAddEventUserModal] = useState(false);
+  const [showPermissionsModal, setShowPermissionsModal] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -54,8 +58,14 @@ const EventDetailPage: React.FC = () => {
   };
 
   const handleEventUpdate = () => {
+    // For event detail changes (name, date, etc.) - reload event data
     loadEvent();
     setRefreshKey(prev => prev + 1);
+  };
+
+  const handleScoreUpdate = () => {
+    // For scoring updates - no reload needed due to optimistic updates
+    // The MultiParticipantScorecard handles its own state updates
   };
 
   const handleAddParticipant = () => {
@@ -123,6 +133,62 @@ const EventDetailPage: React.FC = () => {
     }
   };
 
+  const handleAssignMenDivisionsByCourseHandicap = async () => {
+    if (!event) return;
+
+    // Only show for System 36 Standard events
+    if (event.scoring_type !== 'system_36' || event.system36_variant !== 'standard') {
+      toast.error('This feature is only available for System 36 Standard events');
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: 'Assign Men Divisions by Course Handicap?',
+      description: 'This will assign Men divisions (A/B/C) based on course handicap instead of declared handicap.\n\n✓ Only affects participants without divisions or in generic "Men" division\n✓ Requires teeboxes to be assigned first\n✓ Uses course handicap calculated from teebox slope rating',
+      variant: 'warning',
+      confirmText: 'Continue',
+      cancelText: 'Cancel',
+    });
+
+    if (!confirmed) return;
+
+    try {
+      toast.loading('Assigning Men divisions by course handicap...', { id: 'men-assign' });
+
+      const result = await eventDivisionService.assignMenDivisionsByCourseHandicap(event.id);
+
+      toast.dismiss('men-assign');
+
+      if (result.assigned > 0) {
+        toast.success(
+          `Successfully assigned ${result.assigned} participant(s) to Men divisions. ${result.skipped} skipped.`,
+          { duration: 5000 }
+        );
+        
+        // Refresh the participant list
+        handleParticipantRefresh();
+      } else {
+        toast.warning(
+          `No participants were assigned. ${result.skipped} skipped.`,
+          { duration: 5000 }
+        );
+      }
+
+      // Show errors if any
+      if (result.errors.length > 0 && result.errors.length <= 5) {
+        result.errors.forEach((error) => {
+          toast.error(`${error.participant_name}: ${error.reason}`, { duration: 4000 });
+        });
+      } else if (result.errors.length > 5) {
+        toast.error(`${result.errors.length} participants could not be assigned`, { duration: 4000 });
+      }
+    } catch (error: any) {
+      toast.dismiss('men-assign');
+      console.error('Error assigning Men divisions:', error);
+      toast.error('Failed to assign Men divisions by course handicap');
+    }
+  };
+
   const handleEditParticipant = (participant: Participant) => {
     setEditingParticipant(participant);
     setParticipantViewMode('form');
@@ -159,6 +225,15 @@ const EventDetailPage: React.FC = () => {
     setShowAddEventUserModal(false);
     // Could refresh event users list here if needed
     toast.success('Event user created successfully');
+  };
+
+  const handleManagePermissions = () => {
+    setShowPermissionsModal(true);
+  };
+
+  const handlePermissionsUpdated = () => {
+    // Could refresh event users list here if needed
+    toast.success('Permissions updated successfully');
   };
 
   // Quick Actions Sidebar handlers
@@ -244,7 +319,7 @@ const EventDetailPage: React.FC = () => {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-gradient-to-br from-gray-50 via-white to-gray-50 flex flex-col">
+    <div className="h-screen w-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 flex flex-col">
       {/* Modern Header */}
       <div className="bg-gradient-to-r from-blue-100 via-blue-50 to-blue-100 text-blue-900 shadow-lg border-b border-blue-200/50 px-8 py-6 flex-shrink-0">
         <div className="flex items-center justify-between">
@@ -274,9 +349,9 @@ const EventDetailPage: React.FC = () => {
       </div>
 
       {/* Main Content with Sidebar */}
-      <div className="flex-1 overflow-hidden flex">
+      <div className="flex-1 flex min-h-0">
         {/* Main Content Area */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
             <div className="bg-white/95 backdrop-blur-sm border-b border-gray-200/50 px-8 flex-shrink-0 shadow-sm">
               <TabsList className="bg-transparent border-b-0 h-14">
@@ -325,7 +400,27 @@ const EventDetailPage: React.FC = () => {
                   </svg>
                   <span>Live Score</span>
                 </TabsTrigger>
-                {canAccessWinners() && (
+                {canConfigureWinners(event?.id, event) && (
+                  <TabsTrigger
+                    value="winner-config"
+                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg rounded-lg mx-1 transition-all duration-300 hover:bg-indigo-50 flex items-center space-x-2"
+                  >
+                    <Settings className="w-4 h-4" />
+                    <span>Winner Configuration</span>
+                  </TabsTrigger>
+                )}
+                {canConfigureWinners(event?.id, event) && event && (event.scoring_type === 'system_36' || event.scoring_type === 'stableford') && (
+                  <TabsTrigger
+                    value="sub-divisions"
+                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg rounded-lg mx-1 transition-all duration-300 hover:bg-purple-50 flex items-center space-x-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                    <span>Sub-Divisions</span>
+                  </TabsTrigger>
+                )}
+                {canAccessWinners(event?.id, event) && (
                   <TabsTrigger
                     value="winners"
                     className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-yellow-500 data-[state=active]:to-yellow-600 data-[state=active]:text-white data-[state=active]:shadow-lg rounded-lg mx-1 transition-all duration-300 hover:bg-yellow-50 flex items-center space-x-2"
@@ -337,7 +432,7 @@ const EventDetailPage: React.FC = () => {
               </TabsList>
             </div>
 
-            <div className="flex-1 overflow-y-auto h-full">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden">
             <TabsContent value="overview" className="p-8 pb-20 m-0 pt-2 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
               <EventOverview 
                 event={event} 
@@ -353,6 +448,7 @@ const EventDetailPage: React.FC = () => {
             <TabsContent value="divisions" className="p-8 pb-20 m-0 pt-2 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
               <EventDivisionManager
                 eventId={event.id}
+                event={event}
                 onDivisionsChange={() => {
                   setRefreshKey(prev => prev + 1);
                   loadEvent(); // Refresh participant count
@@ -368,7 +464,7 @@ const EventDetailPage: React.FC = () => {
                       Manage Participants
                     </h2>
                     <div className="flex space-x-2">
-                      {canManageParticipants(event?.id) && (
+                      {canManageParticipants(event?.id, event) && (
                         <>
                           <Button
                             onClick={handleAddParticipant}
@@ -385,6 +481,16 @@ const EventDetailPage: React.FC = () => {
                             <Wand2 className="w-4 h-4" />
                             Auto-Assign Divisions
                           </Button>
+                          {/* {event.scoring_type === 'system_36' && event.system36_variant === 'standard' && (
+                            <Button
+                              onClick={handleAssignMenDivisionsByCourseHandicap}
+                              variant="outline"
+                              className="border-orange-300 text-orange-600 hover:bg-orange-50 flex items-center gap-1"
+                            >
+                              <Target className="w-4 h-4" />
+                              Assign Men Divisions (Course HCP)
+                            </Button>
+                          )} */}
                           <Button
                             onClick={handleUploadParticipants}
                             className="bg-blue-500 hover:bg-blue-600 text-white"
@@ -398,6 +504,7 @@ const EventDetailPage: React.FC = () => {
                   <ParticipantList
                     key={refreshKey}
                     eventId={event.id}
+                    event={event}
                     onEditParticipant={handleEditParticipant}
                     onRefresh={handleParticipantRefresh}
                   />
@@ -443,7 +550,8 @@ const EventDetailPage: React.FC = () => {
             <TabsContent value="scoring" className="p-8 pb-20 m-0 pt-2 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
               <MultiParticipantScorecard
                 eventId={event!.id}
-                onScoreUpdate={handleEventUpdate}
+                event={event}
+                onScoreUpdate={handleScoreUpdate}
               />
             </TabsContent>
 
@@ -493,7 +601,31 @@ const EventDetailPage: React.FC = () => {
               </div>
             </TabsContent>
 
-            {canAccessWinners() && (
+            {canConfigureWinners(event?.id, event) && (
+              <TabsContent value="winner-config" className="p-8 pb-20 m-0 pt-2 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+                <WinnerConfigurationForm
+                  eventId={event!.id}
+                  onSuccess={() => {
+                    toast.success('Configuration saved successfully');
+                  }}
+                />
+              </TabsContent>
+            )}
+
+            {canConfigureWinners(event?.id, event) && event && (event.scoring_type === 'system_36' || event.scoring_type === 'stableford') && (
+              <TabsContent value="sub-divisions" className="p-8 pb-20 m-0 pt-2 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+                <SubDivisionConfigurator
+                  eventId={event.id}
+                  scoringType={event.scoring_type}
+                  onConfigSaved={() => {
+                    toast.success('Sub-division configuration saved');
+                    setRefreshKey(prev => prev + 1);
+                  }}
+                />
+              </TabsContent>
+            )}
+
+            {canAccessWinners(event?.id, event) && (
               <TabsContent value="winners" className="p-8 pb-20 m-0 pt-2 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
               <div className="max-w-4xl mx-auto">
                 <div className="bg-white rounded-lg shadow-md p-6 text-center">
@@ -511,8 +643,13 @@ const EventDetailPage: React.FC = () => {
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
                       <p className="text-sm text-blue-700 mb-3">
                         Winners must be calculated before they can be displayed. This will analyze all scorecards and determine rankings with proper tie-breaking.
+                        {event && (event.scoring_type === 'system_36' || event.scoring_type === 'stableford') && (
+                          <span className="block mt-2 font-semibold">
+                            💡 Configure sub-divisions in the "Winner Config" tab before calculating to group winners by handicap range.
+                          </span>
+                        )}
                       </p>
-                      
+
                     </div>
                   <Button
                         onClick={async () => {
@@ -609,7 +746,9 @@ const EventDetailPage: React.FC = () => {
             onToggleStatus={handleToggleEventStatus}
             onDeleteEvent={handleDeleteEvent}
             onAddEventUser={handleAddEventUser}
+            onManagePermissions={handleManagePermissions}
             canCreateEventUsers={canCreateEventUsers()}
+            canManagePermissions={isSuperAdmin()}
           />
         )}
       </div>
@@ -682,6 +821,18 @@ const EventDetailPage: React.FC = () => {
           eventId={event.id}
           eventName={event.name}
           onUserCreated={handleEventUserCreated}
+        />
+      )}
+
+      {/* Event User Permissions Modal */}
+      {event && (
+        <EventUserPermissionsModal
+          isOpen={showPermissionsModal}
+          onClose={() => setShowPermissionsModal(false)}
+          eventId={event.id}
+          eventName={event.name}
+          eventCreatedBy={event.created_by}
+          onPermissionsUpdated={handlePermissionsUpdated}
         />
       )}
     </div>

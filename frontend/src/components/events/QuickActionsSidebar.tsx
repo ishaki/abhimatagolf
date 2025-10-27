@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Event } from '@/services/eventService';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, Shield } from 'lucide-react';
 
 interface QuickActionsSidebarProps {
   event: Event;
@@ -10,7 +10,9 @@ interface QuickActionsSidebarProps {
   onToggleStatus: () => Promise<void>;
   onDeleteEvent: () => Promise<void>;
   onAddEventUser?: () => void;
+  onManagePermissions?: () => void;
   canCreateEventUsers?: boolean;
+  canManagePermissions?: boolean;
 }
 
 const QuickActionsSidebar: React.FC<QuickActionsSidebarProps> = ({
@@ -19,7 +21,9 @@ const QuickActionsSidebar: React.FC<QuickActionsSidebarProps> = ({
   onToggleStatus,
   onDeleteEvent,
   onAddEventUser,
+  onManagePermissions,
   canCreateEventUsers = false,
+  canManagePermissions = false,
 }) => {
   return (
     <div className="hidden lg:block w-64 bg-white border-l border-gray-200 flex-shrink-0">
@@ -88,6 +92,17 @@ const QuickActionsSidebar: React.FC<QuickActionsSidebarProps> = ({
               >
                 <UserPlus className="w-4 h-4 mr-2" />
                 Add Event User
+              </Button>
+            )}
+
+            {canManagePermissions && onManagePermissions && (
+              <Button
+                onClick={onManagePermissions}
+                variant="outline"
+                className="w-full justify-start border-indigo-300 text-indigo-600 hover:bg-indigo-50"
+              >
+                <Shield className="w-4 h-4 mr-2" />
+                Manage Permissions
               </Button>
             )}
 

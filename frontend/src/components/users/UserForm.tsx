@@ -1,18 +1,28 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { User, UserCreate, UserUpdate, createUser, updateUser } from '@/services/userService';
 import { toast } from 'sonner';
+import { CheckCircle2, XCircle, Loader2, AlertCircle } from 'lucide-react';
 
 const userSchema = z.object({
-  name: z.string().min(1, { message: 'Name is required.' }),
-  email: z.string().email({ message: 'Invalid email address.' }),
-  password: z.string().min(6, { message: 'Password must be at least 6 characters.' }).optional(),
+  full_name: z.string()
+    .min(2, { message: 'Full name must be at least 2 characters.' })
+    .max(100, { message: 'Full name must not exceed 100 characters.' }),
+  email: z.string()
+    .email({ message: 'Please enter a valid email address.' })
+    .max(254, { message: 'Email must not exceed 254 characters.' }),
+  password: z.string()
+    .min(8, { message: 'Password must be at least 8 characters.' })
+    .max(128, { message: 'Password must not exceed 128 characters.' })
+    .optional()
+    .or(z.literal('')),
   role: z.enum(['super_admin', 'event_admin', 'event_user'], {
     required_error: 'Please select a role.',
   }),
@@ -29,11 +39,13 @@ interface UserFormProps {
 
 const UserForm: React.FC<UserFormProps> = ({ user, onSuccess, onCancel }) => {
   const isEditing = !!user;
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
     defaultValues: {
-      name: user?.name || '',
+      full_name: user?.full_name || '',
       email: user?.email || '',
       password: '',
       role: user?.role as 'super_admin' | 'event_admin' | 'event_user' || 'event_user',
@@ -43,148 +55,246 @@ const UserForm: React.FC<UserFormProps> = ({ user, onSuccess, onCancel }) => {
 
   const onSubmit = async (values: UserFormData) => {
     try {
+      setIsSubmitting(true);
+      setError(null);
+
+      console.log('=== User Form Submit ===');
+      console.log('Form values:', values);
+      console.log('Is editing:', isEditing);
+
       if (isEditing) {
         const updateData: UserUpdate = {
-          name: values.name,
+          full_name: values.full_name,
           email: values.email,
           role: values.role,
           is_active: values.is_active,
         };
-        
+
         // Only include password if it's provided
         if (values.password && values.password.length > 0) {
           (updateData as any).password = values.password;
         }
-        
+
         await updateUser(user!.id, updateData);
-        toast.success('User updated successfully');
+        toast.success('User Updated', {
+          description: `${values.full_name} has been updated successfully.`,
+          icon: <CheckCircle2 className="h-4 w-4" />,
+        });
       } else {
+        // Ensure password is provided for new users
+        if (!values.password || values.password.length === 0) {
+          setError('Password is required when creating a new user.');
+          return;
+        }
+
         const createData: UserCreate = {
-          name: values.name,
+          full_name: values.full_name,
           email: values.email,
-          password: values.password!,
+          password: values.password,
           role: values.role,
           is_active: values.is_active,
         };
-        
-        await createUser(createData);
-        toast.success('User created successfully');
+
+        const result = await createUser(createData);
+        console.log('User created successfully:', result);
+        toast.success('User Created', {
+          description: `${values.full_name} has been created successfully.`,
+          icon: <CheckCircle2 className="h-4 w-4" />,
+        });
       }
-      
+
+      console.log('Calling onSuccess callback...');
       onSuccess();
+      form.reset();
     } catch (error: any) {
-      toast.error(isEditing ? 'Failed to update user' : 'Failed to create user', {
-        description: error.response?.data?.detail || 'An unexpected error occurred.',
+      console.error('=== User form error ===');
+      console.error('Error object:', error);
+      console.error('Error response:', error.response);
+      console.error('Error response data:', error.response?.data);
+
+      let errorMessage = 'An unexpected error occurred.';
+
+      if (error.response?.data?.detail) {
+        if (typeof error.response.data.detail === 'string') {
+          errorMessage = error.response.data.detail;
+        } else if (Array.isArray(error.response.data.detail)) {
+          errorMessage = error.response.data.detail.map((e: any) => e.msg || e.message).join(', ');
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      console.error('Parsed error message:', errorMessage);
+      setError(errorMessage);
+
+      toast.error(isEditing ? 'Failed to Update User' : 'Failed to Create User', {
+        description: errorMessage,
+        icon: <XCircle className="h-4 w-4" />,
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle>{isEditing ? 'Edit User' : 'Create User'}</CardTitle>
+    <Card className="w-full max-w-4xl mx-auto shadow-lg">
+      <CardHeader className="space-y-1 bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+        <CardTitle className="text-2xl font-bold">
+          {isEditing ? 'Edit User' : 'Create New User'}
+        </CardTitle>
+        <CardDescription>
+          {isEditing
+            ? 'Update user information and permissions'
+            : 'Add a new user to the system with appropriate access level'}
+        </CardDescription>
       </CardHeader>
-      <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="John Doe" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input placeholder="john@example.com" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>
-                    Password {isEditing && '(leave blank to keep current)'}
-                  </FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="password" 
-                      placeholder="********" 
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="role"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Role</FormLabel>
-                  <FormControl>
-                    <select 
-                      {...field}
-                      className="w-full p-2 border border-gray-300 rounded-md"
-                    >
-                      <option value="event_user">Event User</option>
-                      <option value="event_admin">Event Admin</option>
-                      <option value="super_admin">Super Admin</option>
-                    </select>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
+      <CardContent className="pt-6">
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField
+                control={form.control}
+                name="full_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-semibold">Full Name *</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="e.g., John Doe"
+                        className="h-10"
+                        {...field}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-semibold">Email Address *</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="email"
+                        placeholder="e.g., john.doe@example.com"
+                        className="h-10"
+                        {...field}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-semibold">
+                      Password {isEditing ? '(optional)' : '*'}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        placeholder={isEditing ? 'Leave blank to keep current' : 'Min 8 characters'}
+                        className="h-10"
+                        {...field}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="role"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-semibold">Role *</FormLabel>
+                    <FormControl>
+                      <select
+                        {...field}
+                        disabled={isSubmitting}
+                        className="w-full h-10 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      >
+                        <option value="event_user">Event User</option>
+                        <option value="event_admin">Event Admin</option>
+                        <option value="super_admin">Super Admin</option>
+                      </select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
             <FormField
               control={form.control}
               name="is_active"
               render={({ field }) => (
-                <FormItem className="flex items-center space-x-2">
+                <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3 bg-gray-50">
                   <FormControl>
                     <input
                       type="checkbox"
                       checked={field.value}
                       onChange={field.onChange}
-                      className="rounded"
+                      disabled={isSubmitting}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed"
                     />
                   </FormControl>
-                  <FormLabel>Active</FormLabel>
-                  <FormMessage />
+                  <div className="space-y-0 leading-none">
+                    <FormLabel className="text-sm font-medium cursor-pointer">
+                      Active Account
+                    </FormLabel>
+                  </div>
                 </FormItem>
               )}
             />
-            
-            <div className="flex gap-2">
-              <Button type="submit" className="flex-1" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Saving...' : (isEditing ? 'Update' : 'Create')}
+
+            <div className="flex gap-3 pt-4 border-t">
+              <Button
+                type="submit"
+                className="flex-1"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {isEditing ? 'Updating...' : 'Creating...'}
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    {isEditing ? 'Update User' : 'Create User'}
+                  </>
+                )}
               </Button>
-              <Button type="button" variant="outline" onClick={onCancel} className="border-gray-400 text-gray-700 bg-gray-100 hover:bg-gray-200 hover:border-gray-500">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onCancel}
+                className="flex-1"
+                disabled={isSubmitting}
+              >
                 Cancel
               </Button>
             </div>
-          </form>
-        </Form>
+        </form>
       </CardContent>
     </Card>
   );

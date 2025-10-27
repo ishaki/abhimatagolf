@@ -56,9 +56,13 @@ export const downloadScorecardsExcel = async (eventId: number): Promise<void> =>
   }
 };
 
-export const downloadParticipantTemplate = async (): Promise<void> => {
+export const downloadParticipantTemplate = async (eventId?: number): Promise<void> => {
   try {
-    const response = await api.get('/excel/template/participants', {
+    const url = eventId 
+      ? `/excel/template/participants?event_id=${eventId}`
+      : '/excel/template/participants';
+    
+    const response = await api.get(url, {
       responseType: 'blob',
     });
     
@@ -67,14 +71,14 @@ export const downloadParticipantTemplate = async (): Promise<void> => {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     });
     
-    const url = window.URL.createObjectURL(blob);
+    const url_download = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = url;
+    link.href = url_download;
     link.download = `participant_upload_template_${new Date().toISOString().slice(0, 10)}.xlsx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+    window.URL.revokeObjectURL(url_download);
   } catch (error) {
     console.error('Error downloading participant template:', error);
     throw error;

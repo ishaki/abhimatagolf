@@ -1,7 +1,7 @@
 from pydantic import BaseModel, validator, Field
 from typing import Optional, Dict, Any, List
 from datetime import datetime, date
-from models.event import ScoringType
+from models.event import ScoringType, System36Variant
 from core.validation import SecurityValidators
 
 
@@ -11,6 +11,7 @@ class EventCreate(BaseModel):
     event_date: date = Field(..., description="Event date")
     course_id: int = Field(..., gt=0, description="Course ID")
     scoring_type: ScoringType = Field(..., description="Scoring type")
+    system36_variant: Optional[System36Variant] = Field(default=System36Variant.STANDARD, description="System 36 variant: standard uses course handicap for Men divisions, modified uses declared handicap")
     is_active: bool = Field(default=True, description="Whether event is active")
     
     @validator('name')
@@ -39,6 +40,7 @@ class EventUpdate(BaseModel):
     event_date: Optional[date] = Field(None, description="Event date")
     course_id: Optional[int] = Field(None, gt=0, description="Course ID")
     scoring_type: Optional[ScoringType] = Field(None, description="Scoring type")
+    system36_variant: Optional[System36Variant] = Field(None, description="System 36 variant: standard uses course handicap for Men divisions, modified uses declared handicap")
     divisions_config: Optional[Dict[str, Any]] = Field(None, description="Divisions configuration")
     is_active: Optional[bool] = Field(None, description="Whether event is active")
     
@@ -72,6 +74,7 @@ class EventResponse(BaseModel):
     course_id: int
     created_by: int
     scoring_type: ScoringType
+    system36_variant: Optional[System36Variant] = None
     divisions_config: Optional[Dict[str, Any]] = None
     is_active: bool
     created_at: datetime

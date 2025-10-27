@@ -11,6 +11,11 @@ class ScoringType(str, Enum):
     STABLEFORD = "stableford"
 
 
+class System36Variant(str, Enum):
+    STANDARD = "standard"  # Lowercase to match database values
+    MODIFIED = "modified"
+
+
 class Event(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(max_length=200)
@@ -19,6 +24,7 @@ class Event(SQLModel, table=True):
     course_id: int = Field(foreign_key="course.id")
     created_by: int = Field(foreign_key="user.id")
     scoring_type: ScoringType
+    system36_variant: Optional[System36Variant] = Field(default=System36Variant.STANDARD, description="System 36 variant: standard uses course handicap for Men divisions, modified uses declared handicap")
     divisions_config: Optional[Dict[str, Any]] = Field(default=None, sa_type=JSON)
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -27,9 +33,31 @@ class Event(SQLModel, table=True):
     # Relationships
     course: "Course" = Relationship(back_populates="events")
     creator: "User" = Relationship(back_populates="created_events")
-    participants: List["Participant"] = Relationship(back_populates="event")
-    divisions: List["EventDivision"] = Relationship(back_populates="event")
-    user_events: List["UserEvent"] = Relationship(back_populates="event")
-    scorecards: List["Scorecard"] = Relationship(back_populates="event")
-    leaderboard_cache: List["LeaderboardCache"] = Relationship(back_populates="event")
-    winner_results: List["WinnerResult"] = Relationship(back_populates="event")
+    participants: List["Participant"] = Relationship(
+        back_populates="event",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    divisions: List["EventDivision"] = Relationship(
+        back_populates="event",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    user_events: List["UserEvent"] = Relationship(
+        back_populates="event",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    scorecards: List["Scorecard"] = Relationship(
+        back_populates="event",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    leaderboard_cache: List["LeaderboardCache"] = Relationship(
+        back_populates="event",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    winner_results: List["WinnerResult"] = Relationship(
+        back_populates="event",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    winner_config: Optional["WinnerConfiguration"] = Relationship(
+        back_populates="event",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )

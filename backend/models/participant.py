@@ -35,12 +35,13 @@ class Participant(SQLModel, table=True):
         return None
 
     @property
-    def course_handicap(self) -> float:
+    def course_handicap(self) -> int:
         """Calculate course handicap based on teebox slope rating
 
         Formula: (Handicap Index × Slope Rating) / 113
+        Returns rounded integer value
         """
         if self.teebox and self.teebox.slope_rating:
-            return (self.declared_handicap * self.teebox.slope_rating) / 113.0
+            return round((self.declared_handicap * self.teebox.slope_rating) / 113.0)
         # Fallback to declared handicap if no teebox assigned
-        return self.declared_handicap
+        return round(self.declared_handicap)

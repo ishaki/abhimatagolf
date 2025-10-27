@@ -18,13 +18,22 @@ class WinnerResult(SQLModel, table=True):
     division_id: Optional[int] = Field(default=None, foreign_key="eventdivision.id")
 
     # Ranking
-    overall_rank: int  # Overall ranking in the event
+    overall_rank: Optional[int] = Field(default=None)  # Overall ranking in the event (optional)
     division_rank: Optional[int] = Field(default=None)  # Ranking within division
 
     # Scores
     gross_score: int
     net_score: Optional[int] = Field(default=None)
-    handicap: float
+
+    # Handicap information
+    declared_handicap: float  # User's input handicap (from participant form)
+    course_handicap: float  # Calculated handicap based on teebox slope rating
+    system36_handicap: Optional[float] = Field(default=None)  # System 36 calculated handicap (36 - total points)
+
+    # Teebox information (for transparency and audit trail)
+    teebox_name: Optional[str] = Field(default=None, max_length=50)
+    teebox_course_rating: Optional[float] = Field(default=None)
+    teebox_slope_rating: Optional[int] = Field(default=None)
 
     # Tie-breaking information
     is_tied: bool = Field(default=False)

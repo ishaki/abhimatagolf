@@ -21,6 +21,7 @@ class EventService:
             course_id=event_data.course_id,
             created_by=created_by,
             scoring_type=event_data.scoring_type,
+            system36_variant=event_data.system36_variant,
             is_active=event_data.is_active
         )
         self.session.add(event)
@@ -140,6 +141,7 @@ class EventService:
             course_id=event.course_id,
             created_by=event.created_by,
             scoring_type=event.scoring_type,
+            system36_variant=event.system36_variant,
             divisions_config=event.divisions_config,
             is_active=event.is_active,
             created_at=event.created_at,

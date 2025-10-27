@@ -20,6 +20,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onSuccess, onCancel }) => 
     event_date: '',
     course_id: '',
     scoring_type: 'stroke' as 'stroke' | 'net_stroke' | 'system_36' | 'stableford',
+    system36_variant: 'standard' as 'standard' | 'modified',
     is_active: true
   });
   const [courses, setCourses] = useState<Course[]>([]);
@@ -35,6 +36,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onSuccess, onCancel }) => 
         event_date: event.event_date,
         course_id: event.course_id.toString(),
         scoring_type: event.scoring_type,
+        system36_variant: event.system36_variant || 'standard',
         is_active: event.is_active
       });
     }
@@ -84,6 +86,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onSuccess, onCancel }) => 
         event_date: formData.event_date,
         course_id: parseInt(formData.course_id),
         scoring_type: formData.scoring_type,
+        system36_variant: formData.scoring_type === 'system_36' ? formData.system36_variant : undefined,
         is_active: formData.is_active
       };
 
@@ -191,6 +194,27 @@ const EventForm: React.FC<EventFormProps> = ({ event, onSuccess, onCancel }) => 
                     ))}
                   </select>
                 </div>
+
+                {/* System 36 Variant - Only show for System 36 */}
+                {formData.scoring_type === 'system_36' && (
+                  <div>
+                    <Label htmlFor="system36_variant">System 36 Variant *</Label>
+                    <select
+                      id="system36_variant"
+                      value={formData.system36_variant}
+                      onChange={(e) => handleInputChange('system36_variant', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      required
+                    >
+                      <option value="standard">Standard (Course Handicap for Men)</option>
+                      <option value="modified">Modified (Declared Handicap for Men)</option>
+                    </select>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Standard: Men divisions assigned by course handicap after teebox assignment.<br/>
+                      Modified: Men divisions assigned by declared handicap at the beginning.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Right Column */}

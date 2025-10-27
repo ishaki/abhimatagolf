@@ -8,11 +8,13 @@ import { usePermissions } from '@/hooks/usePermissions';
 
 interface MultiParticipantScorecardProps {
   eventId: number;
+  event?: any; // Add event data for permission checking
   onScoreUpdate?: () => void;
 }
 
 const MultiParticipantScorecard: React.FC<MultiParticipantScorecardProps> = ({
   eventId,
+  event,
   onScoreUpdate,
 }) => {
   const { canManageScores } = usePermissions();
@@ -63,9 +65,24 @@ const MultiParticipantScorecard: React.FC<MultiParticipantScorecardProps> = ({
     setEditingParticipant(scorecard);
   };
 
-  const handleModalClose = () => {
+  const handleModalClose = (updatedScorecard?: ScorecardResponse) => {
     setEditingParticipant(null);
-    loadScorecards();
+    
+    if (updatedScorecard) {
+      // Optimistic update: update only the specific scorecard in the state
+      setScorecards(prevScorecards => 
+        prevScorecards.map(scorecard => 
+          scorecard.participant_id === updatedScorecard.participant_id 
+            ? updatedScorecard 
+            : scorecard
+        )
+      );
+    } else {
+      // If no updated scorecard (cancelled), reload all scorecards to ensure consistency
+      loadScorecards();
+    }
+    
+    // Still notify parent component for any side effects (like updating event stats)
     if (onScoreUpdate) {
       onScoreUpdate();
     }
@@ -333,7 +350,7 @@ const MultiParticipantScorecard: React.FC<MultiParticipantScorecardProps> = ({
 
                   {/* Edit Button */}
                   <td className="sticky right-0 z-20 bg-white border-l px-4 py-2 text-center">
-                    {canManageScores(eventId) && (
+                    {canManageScores(eventId, event) && (
                       <Button
                         onClick={() => handleEditClick(scorecard)}
                         size="sm"

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { loginUser } from '@/services/authService'
+import { startTokenMonitoring, stopTokenMonitoring } from '@/utils/tokenMonitor'
 
 interface User {
   id: number
@@ -42,13 +43,16 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
       // Store token and user info
       localStorage.setItem('access_token', token)
       localStorage.setItem('user', JSON.stringify(data.user))
-      
+
       set({
         user: data.user,
         token,
         isAuthenticated: true,
         isLoading: false,
       })
+
+      // Start token monitoring after successful login
+      startTokenMonitoring()
     } catch (error) {
       set({ isLoading: false })
       throw error
@@ -56,6 +60,9 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
   },
 
   logout: () => {
+    // Stop token monitoring
+    stopTokenMonitoring()
+
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     localStorage.removeItem('user')
@@ -69,6 +76,10 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
   logoutFromExternalSource: () => {
     // This method is called by API interceptors when session expires
     // It clears the auth state without triggering additional API calls
+
+    // Stop token monitoring
+    stopTokenMonitoring()
+
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     localStorage.removeItem('user')

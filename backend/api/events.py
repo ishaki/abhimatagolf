@@ -5,7 +5,7 @@ from datetime import date, datetime
 from pydantic import BaseModel
 from core.database import get_session
 from core.security import get_current_user
-from core.permissions import get_user_accessible_events
+from core.permissions import get_user_accessible_events, can_modify_event
 from services.event_service import EventService
 from schemas.event import EventCreate, EventUpdate, EventResponse, EventListResponse, EventStats
 from models.user import User
@@ -189,11 +189,11 @@ async def update_event(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     
-    # Check permissions
-    if current_user.role == "event_admin" and event.created_by != current_user.id:
+    # Check permissions using the new permission function
+    if not can_modify_event(current_user, event_id, session):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
-            detail="Can only edit your own events"
+            detail="You don't have permission to modify this event"
         )
     
     updated_event = event_service.update_event(event_id, event_data)
@@ -213,11 +213,11 @@ async def delete_event(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     
-    # Check permissions
-    if current_user.role == "event_admin" and event.created_by != current_user.id:
+    # Check permissions using the new permission function
+    if not can_modify_event(current_user, event_id, session):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
-            detail="Can only delete your own events"
+            detail="You don't have permission to delete this event"
         )
     
     success = event_service.delete_event(event_id)

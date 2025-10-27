@@ -126,12 +126,16 @@ function findBestDivisionMatch(
   participant: Participant,
   divisions: EventDivision[]
 ): EventDivision | null {
-  const handicap = participant.declared_handicap;
   const name = participant.name.toLowerCase();
   const sex = participant.sex?.toLowerCase();
 
   // Helper function to check if handicap fits division range
   const handicapFits = (division: EventDivision): boolean => {
+    // Use course handicap for Men divisions that have use_course_handicap_for_assignment = true
+    const handicap = division.use_course_handicap_for_assignment && division.division_type === 'men' 
+      ? participant.course_handicap 
+      : participant.declared_handicap;
+    
     const minFits = division.handicap_min === null || handicap >= division.handicap_min;
     const maxFits = division.handicap_max === null || handicap <= division.handicap_max;
     return minFits && maxFits;

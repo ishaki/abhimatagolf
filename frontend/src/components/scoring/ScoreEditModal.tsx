@@ -11,7 +11,7 @@ import {
 
 interface ScoreEditModalProps {
   scorecard: ScorecardResponse;
-  onClose: () => void;
+  onClose: (updatedScorecard?: ScorecardResponse) => void;
 }
 
 const ScoreEditModal: React.FC<ScoreEditModalProps> = ({ scorecard, onClose }) => {
@@ -58,14 +58,14 @@ const ScoreEditModal: React.FC<ScoreEditModalProps> = ({ scorecard, onClose }) =
         return;
       }
 
-      await bulkSubmitScores({
+      const updatedScorecard = await bulkSubmitScores({
         participant_id: scorecard.participant_id,
         scores: holeScores,
       });
 
       toast.success('Scores saved successfully!');
       setHasChanges(false);
-      onClose();
+      onClose(updatedScorecard);
     } catch (error: any) {
       console.error('Error saving scores:', error);
       toast.error(error.response?.data?.detail || 'Failed to save scores');
@@ -102,7 +102,7 @@ const ScoreEditModal: React.FC<ScoreEditModalProps> = ({ scorecard, onClose }) =
   const grossScore = outTotal + inTotal;
 
   return (
-    <Dialog open={true} onOpenChange={onClose}>
+    <Dialog open={true} onOpenChange={() => onClose()}>
       <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center justify-between">
@@ -113,7 +113,7 @@ const ScoreEditModal: React.FC<ScoreEditModalProps> = ({ scorecard, onClose }) =
               </div>
             </div>
             <Button
-              onClick={onClose}
+              onClick={() => onClose()}
               variant="ghost"
               size="sm"
               className="text-gray-500 hover:text-gray-700"
@@ -142,6 +142,7 @@ const ScoreEditModal: React.FC<ScoreEditModalProps> = ({ scorecard, onClose }) =
                     max="15"
                     value={scores[hole.hole_number] || ''}
                     onChange={(e) => handleScoreChange(hole.hole_number, e.target.value)}
+                    onFocus={(e) => e.target.select()}
                     disabled={saving}
                     className={`w-full px-2 py-2 text-center text-lg font-bold border-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                       scores[hole.hole_number] > 0 ? getScoreColor(hole.hole_number) : 'border-gray-300'
@@ -175,6 +176,7 @@ const ScoreEditModal: React.FC<ScoreEditModalProps> = ({ scorecard, onClose }) =
                     max="15"
                     value={scores[hole.hole_number] || ''}
                     onChange={(e) => handleScoreChange(hole.hole_number, e.target.value)}
+                    onFocus={(e) => e.target.select()}
                     disabled={saving}
                     className={`w-full px-2 py-2 text-center text-lg font-bold border-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                       scores[hole.hole_number] > 0 ? getScoreColor(hole.hole_number) : 'border-gray-300'
@@ -213,7 +215,7 @@ const ScoreEditModal: React.FC<ScoreEditModalProps> = ({ scorecard, onClose }) =
 
             <div className="flex gap-2">
               <Button
-                onClick={onClose}
+                onClick={() => onClose()}
                 variant="outline"
                 disabled={saving}
                 className="border-gray-400 text-gray-700 bg-gray-100 hover:bg-gray-200 hover:border-gray-500"

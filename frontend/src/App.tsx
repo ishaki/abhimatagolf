@@ -1,7 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
 import { AuthProvider } from './contexts/AuthContext'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ConfirmDialogProvider } from './components/ui/confirm-dialog'
+import { Toaster } from 'sonner'
 import LoginPage from './pages/LoginPage'
 import Dashboard from './pages/Dashboard'
 import UsersPage from './pages/UsersPage'
@@ -13,6 +15,7 @@ import LiveScorePage from './pages/LiveScorePage' // Phase 3.2: Public Live Scor
 import WinnerPage from './pages/WinnerPage' // Phase 3.3: Public Winner Display
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import Layout from './components/layout/Layout'
+import { startTokenMonitoring } from './utils/tokenMonitor'
 
 // Create a client
 const queryClient = new QueryClient({
@@ -25,6 +28,15 @@ const queryClient = new QueryClient({
 })
 
 function App() {
+  // Start token monitoring on app initialization if user is logged in
+  useEffect(() => {
+    const token = localStorage.getItem('access_token')
+    if (token) {
+      console.log('App initialized with token, starting token monitor...')
+      startTokenMonitoring()
+    }
+  }, [])
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
@@ -56,6 +68,7 @@ function App() {
               />
             </Routes>
           </Router>
+          <Toaster position="top-right" richColors closeButton />
         </ConfirmDialogProvider>
       </AuthProvider>
     </QueryClientProvider>

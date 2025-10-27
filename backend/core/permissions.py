@@ -83,7 +83,7 @@ def require_event_access(event_id: int):
 
 def can_access_event(user: User, event_id: int, session: Session) -> bool:
     """
-    Check if a user can access a specific event.
+    Check if a user can access a specific event (read access).
     
     Args:
         user: The user to check
@@ -97,12 +97,9 @@ def can_access_event(user: User, event_id: int, session: Session) -> bool:
     if user.role == UserRole.SUPER_ADMIN:
         return True
     
-    # Event admins can access events they created
+    # Event admins can access ALL events (read-only for events they didn't create)
     if user.role == UserRole.EVENT_ADMIN:
-        event_statement = select(Event).where(Event.id == event_id)
-        event = session.exec(event_statement).first()
-        if event and event.created_by == user.id:
-            return True
+        return True
     
     # Event users can access events they're assigned to
     if user.role == UserRole.EVENT_USER:
@@ -114,6 +111,33 @@ def can_access_event(user: User, event_id: int, session: Session) -> bool:
         if user_event:
             return True
     
+    return False
+
+
+def can_modify_event(user: User, event_id: int, session: Session) -> bool:
+    """
+    Check if a user can modify (edit/delete) a specific event.
+    
+    Args:
+        user: The user to check
+        event_id: The ID of the event
+        session: Database session
+        
+    Returns:
+        bool: True if user can modify the event, False otherwise
+    """
+    # Super admins can modify all events
+    if user.role == UserRole.SUPER_ADMIN:
+        return True
+    
+    # Event admins can only modify events they created
+    if user.role == UserRole.EVENT_ADMIN:
+        event_statement = select(Event).where(Event.id == event_id)
+        event = session.exec(event_statement).first()
+        if event and event.created_by == user.id:
+            return True
+    
+    # Event users cannot modify events
     return False
 
 
@@ -216,7 +240,7 @@ def can_manage_scores(user: User, event_id: int, session: Session) -> bool:
 
 def get_user_accessible_events(user: User, session: Session) -> List[int]:
     """
-    Get list of event IDs that a user can access.
+    Get list of event IDs that a user can access (read access).
     
     Args:
         user: The user to check
@@ -232,8 +256,8 @@ def get_user_accessible_events(user: User, session: Session) -> List[int]:
         return list(events)
     
     elif user.role == UserRole.EVENT_ADMIN:
-        # Event admins can access events they created
-        events_statement = select(Event.id).where(Event.created_by == user.id)
+        # Event admins can access ALL events (read-only for events they didn't create)
+        events_statement = select(Event.id)
         events = session.exec(events_statement).all()
         return list(events)
     
@@ -242,6 +266,36 @@ def get_user_accessible_events(user: User, session: Session) -> List[int]:
         user_events_statement = select(UserEvent.event_id).where(UserEvent.user_id == user.id)
         user_events = session.exec(user_events_statement).all()
         return list(user_events)
+    
+    return []
+
+
+def get_user_modifiable_events(user: User, session: Session) -> List[int]:
+    """
+    Get list of event IDs that a user can modify (write access).
+    
+    Args:
+        user: The user to check
+        session: Database session
+        
+    Returns:
+        List[int]: List of event IDs the user can modify
+    """
+    if user.role == UserRole.SUPER_ADMIN:
+        # Super admins can modify all events
+        events_statement = select(Event.id)
+        events = session.exec(events_statement).all()
+        return list(events)
+    
+    elif user.role == UserRole.EVENT_ADMIN:
+        # Event admins can only modify events they created
+        events_statement = select(Event.id).where(Event.created_by == user.id)
+        events = session.exec(events_statement).all()
+        return list(events)
+    
+    elif user.role == UserRole.EVENT_USER:
+        # Event users cannot modify events
+        return []
     
     return []
 
