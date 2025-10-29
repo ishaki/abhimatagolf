@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 import { AuthProvider } from './contexts/AuthContext'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ConfirmDialogProvider } from './components/ui/confirm-dialog'
-import { Toaster } from 'sonner'
+import { Toaster } from '@/components/ui/sonner'
 import LoginPage from './pages/LoginPage'
 import Dashboard from './pages/Dashboard'
 import UsersPage from './pages/UsersPage'
@@ -68,7 +68,7 @@ function App() {
               />
             </Routes>
           </Router>
-          <Toaster position="top-right" richColors closeButton />
+          <Toaster />
         </ConfirmDialogProvider>
       </AuthProvider>
     </QueryClientProvider>

@@ -2,6 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom Toast Notification Styles */
+.toast-item {
+  border-radius: 8px !important;
+  padding: 16px !important;
+  font-family: Inter, system-ui, sans-serif !important;
+}
+
+.toast-success {
+  border-left: 4px solid #22c55e !important;
+}
+
+.toast-error {
+  border-left: 4px solid #ef4444 !important;
+}
+
+.toast-warning {
+  border-left: 4px solid #f59e0b !important;
+}
+
+.toast-info {
+  border-left: 4px solid #3b82f6 !important;
+}
+
+/* Ensure icons are visible */
+.sonner-toast svg {
+  width: 20px !important;
+  height: 20px !important;
+  display: inline-block !important;
+}
+
+.sonner-toast-close {
+  opacity: 0.7 !important;
+}
+
+.sonner-toast-close:hover {
+  opacity: 1 !important;
+}
+
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;

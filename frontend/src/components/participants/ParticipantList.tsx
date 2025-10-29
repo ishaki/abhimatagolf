@@ -43,7 +43,6 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [divisions, setDivisions] = useState<EventDivision[]>([]);
   const [loadingDivisions, setLoadingDivisions] = useState(false);
-  const [assigningSubdivisions, setAssigningSubdivisions] = useState(false);
 
   // Initialize search term from filters
   useEffect(() => {
@@ -72,43 +71,6 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
     } finally {
       setLoadingDivisions(false);
     }
-  };
-
-  const handleAutoAssignSubdivisions = async () => {
-    if (!eventId) return;
-
-    try {
-      setAssigningSubdivisions(true);
-      const result = await eventDivisionService.autoAssignSubdivisions(eventId);
-
-      toast.success(
-        `Auto-assigned ${result.assigned} participants to sub-divisions. ${result.skipped} skipped.`
-      );
-
-      if (result.errors.length > 0) {
-        console.warn('Assignment errors:', result.errors);
-      }
-
-      // Reload participants and divisions
-      loadParticipants();
-      loadDivisions();
-      onRefresh();
-    } catch (error: any) {
-      console.error('Error auto-assigning sub-divisions:', error);
-      const errorMessage = error.response?.data?.detail || 'Failed to auto-assign participants';
-      toast.error(errorMessage);
-    } finally {
-      setAssigningSubdivisions(false);
-    }
-  };
-
-  const canAutoAssignSubdivisions = () => {
-    if (!event) return false;
-    // Can auto-assign for Net Stroke and System 36 Modified
-    return (
-      event.scoring_type === 'net_stroke' ||
-      (event.scoring_type === 'system_36' && event.system36_variant === 'modified')
-    );
   };
 
   const loadParticipants = async () => {
@@ -249,18 +211,6 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
               <option value="50">50/page</option>
               <option value="100">100/page</option>
             </select>
-
-            {/* Auto-Assign Sub-Divisions Button */}
-            {canAutoAssignSubdivisions() && canManageParticipants(eventId, event) && (
-              <Button
-                onClick={handleAutoAssignSubdivisions}
-                disabled={assigningSubdivisions}
-                className="bg-purple-500 hover:bg-purple-600 text-white h-10"
-                size="sm"
-              >
-                {assigningSubdivisions ? 'Assigning...' : 'Auto-Assign Sub-Divisions'}
-              </Button>
-            )}
           </div>
         </div>
       </div>
@@ -326,37 +276,38 @@ const ParticipantList: React.FC<ParticipantListProps> = ({
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {participant.declared_handicap.toFixed(0)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {participant.division ? (
-                        <div className="flex flex-col">
-                          <span className="text-gray-900 font-medium">{participant.division}</span>
-                          {participant.division_id && divisions.find(d => d.id === participant.division_id)?.parent_division_id && (
-                            <span className="text-xs text-blue-600">Sub-Division</span>
-                          )}
-                        </div>
+                        <span className="font-medium">{participant.division}</span>
                       ) : (
                         <span className="text-gray-400">-</span>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {participant.country ? (
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center gap-2">
                           {(() => {
                             const flagEmoji = getCountryFlag(participant.country);
                             return flagEmoji ? (
-                              <span className="text-lg" title={participant.country}>
+                              <span
+                                className="text-2xl leading-none inline-block"
+                                role="img"
+                                aria-label={`${participant.country} flag`}
+                                style={{ minWidth: '1.5em', textAlign: 'center' }}
+                                title={participant.country}
+                              >
                                 {flagEmoji}
                               </span>
                             ) : (
-                              <div className="w-5 h-3.5 bg-gray-200 rounded-sm flex items-center justify-center">
-                                <span className="text-xs text-gray-500">?</span>
+                              <div className="w-6 h-4 bg-gray-100 border border-gray-300 rounded-sm flex items-center justify-center" title="Flag not available">
+                                <span className="text-xs text-gray-400">🏳️</span>
                               </div>
                             );
                           })()}
-                          <span>{participant.country}</span>
+                          <span className="font-medium">{participant.country}</span>
                         </div>
                       ) : (
-                        '-'
+                        <span className="text-gray-400">-</span>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

@@ -56,6 +56,7 @@ class ScorecardResponse(BaseModel):
     event_id: int
     event_name: str
     handicap: float
+    country: Optional[str] = Field(default=None, description="Participant's country")
 
     # Front 9
     front_nine: List[HoleScoreResponse]

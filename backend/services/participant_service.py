@@ -14,23 +14,98 @@ class ParticipantService:
     def __init__(self, session: Session):
         self.session = session
 
+    def validate_participant_division_for_system36_modified(
+        self,
+        participant: Participant,
+        division: Optional[EventDivision] = None
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Validate participant's declared handicap against division range for System 36 Modified.
+
+        For System 36 Modified mode, declared handicap is required and should fall within
+        the division's handicap range. Returns a warning (not error) if mismatch is detected,
+        allowing admin to override.
+
+        Args:
+            participant: Participant to validate
+            division: EventDivision (if None, will fetch from participant.division_id)
+
+        Returns:
+            Tuple of (is_valid, warning_message)
+            - is_valid: True if valid or no validation needed, False if warning should be shown
+            - warning_message: Description of the warning (None if valid)
+        """
+        from models.event import ScoringType, System36Variant
+
+        # Get event
+        event = self.session.get(Event, participant.event_id)
+        if not event:
+            return (True, None)  # Event not found, skip validation
+
+        # Only validate for System 36 Modified
+        if event.scoring_type != ScoringType.SYSTEM_36 or event.system36_variant != System36Variant.MODIFIED:
+            return (True, None)  # Not System 36 Modified, no validation needed
+
+        # Check if participant has declared handicap
+        if participant.declared_handicap is None:
+            return (False, "Declared handicap is required for System 36 Modified mode")
+
+        # Get division if not provided
+        if division is None and participant.division_id:
+            division = self.session.get(EventDivision, participant.division_id)
+
+        # If no division assigned, no validation needed
+        if not division:
+            return (True, None)
+
+        # Check if division has handicap range defined
+        if division.handicap_min is None or division.handicap_max is None:
+            return (True, None)  # No range defined, skip validation
+
+        # Validate handicap is within division range
+        if not (division.handicap_min <= participant.declared_handicap <= division.handicap_max):
+            warning = (
+                f"Warning: Declared handicap {participant.declared_handicap} is outside "
+                f"division '{division.name}' range [{division.handicap_min}, {division.handicap_max}]. "
+                f"You can override and save anyway."
+            )
+            return (False, warning)
+
+        return (True, None)  # Valid
+
     def create_participant(
         self,
         participant_data: ParticipantCreate
-    ) -> Participant:
-        """Create a new participant"""
+    ) -> Tuple[Participant, Optional[str]]:
+        """
+        Create a new participant
+
+        Returns:
+            Tuple of (participant, warning_message)
+            - participant: Created participant
+            - warning_message: Validation warning (None if no warnings)
+        """
         # Verify event exists
         event = self.session.get(Event, participant_data.event_id)
         if not event:
             raise ValueError(f"Event with id {participant_data.event_id} not found")
 
         participant = Participant(**participant_data.model_dump())
+
+        # Validate division for System 36 Modified (returns warning, doesn't block)
+        division = None
+        if participant.division_id:
+            division = self.session.get(EventDivision, participant.division_id)
+
+        is_valid, warning = self.validate_participant_division_for_system36_modified(participant, division)
+
         self.session.add(participant)
         self.session.commit()
         self.session.refresh(participant)
 
-        logger.info(f"Created participant: {participant.name} for event {participant_data.event_id}")
-        return participant
+        logger.info(f"Created participant: {participant.name} for event {participant_data.event_id}" +
+                   (f" with warning: {warning}" if warning else ""))
+        return participant, warning
 
     def create_participants_bulk(
         self,
@@ -90,6 +165,17 @@ class ParticipantService:
             .where(Scorecard.participant_id == participant_id)
         ).one()
 
+        # Normalize sex field to match enum (Male/Female)
+        sex_value = None
+        if participant.sex:
+            sex_lower = participant.sex.lower()
+            if sex_lower in ['male', 'm']:
+                sex_value = 'Male'
+            elif sex_lower in ['female', 'f']:
+                sex_value = 'Female'
+            else:
+                sex_value = participant.sex.title()
+        
         return ParticipantResponse(
             id=participant.id,
             event_id=participant.event_id,
@@ -99,7 +185,7 @@ class ParticipantService:
             division_id=participant.division_id,
             registered_at=participant.registered_at,
             country=participant.country,
-            sex=participant.sex,
+            sex=sex_value,
             phone_no=participant.phone_no,
             event_status=participant.event_status,
             event_description=participant.event_description,
@@ -157,23 +243,38 @@ class ParticipantService:
         self,
         participant_id: int,
         participant_data: ParticipantUpdate
-    ) -> Optional[Participant]:
-        """Update participant information"""
+    ) -> Tuple[Optional[Participant], Optional[str]]:
+        """
+        Update participant information
+
+        Returns:
+            Tuple of (participant, warning_message)
+            - participant: Updated participant (None if not found)
+            - warning_message: Validation warning (None if no warnings)
+        """
         participant = self.session.get(Participant, participant_id)
         if not participant:
-            return None
+            return None, None
 
         # Update fields
         update_data = participant_data.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(participant, key, value)
 
+        # Validate division for System 36 Modified (returns warning, doesn't block)
+        division = None
+        if participant.division_id:
+            division = self.session.get(EventDivision, participant.division_id)
+
+        is_valid, warning = self.validate_participant_division_for_system36_modified(participant, division)
+
         self.session.add(participant)
         self.session.commit()
         self.session.refresh(participant)
 
-        logger.info(f"Updated participant {participant_id}: {participant.name}")
-        return participant
+        logger.info(f"Updated participant {participant_id}: {participant.name}" +
+                   (f" with warning: {warning}" if warning else ""))
+        return participant, warning
 
     def delete_participant(self, participant_id: int) -> bool:
         """Delete a participant"""
@@ -392,163 +493,6 @@ class ParticipantService:
         logger.info(f"Assigned participant {participant.name} to division {division.name if division_id else 'None'}")
         return True
 
-    def auto_assign_to_subdivisions(self, event_id: int) -> dict:
-        """
-        Auto-assign participants to pre-defined sub-divisions based on declared handicap.
-
-        This is for Net Stroke and System 36 Modified events where sub-divisions are pre-defined.
-        Participants are assigned to the appropriate sub-division based on their declared handicap.
-
-        Returns:
-            dict: Assignment results with counts and errors
-        """
-        from models.event import ScoringType, System36Variant
-
-        # Get event and verify it uses pre-defined sub-divisions
-        event = self.session.get(Event, event_id)
-        if not event:
-            raise ValueError(f"Event {event_id} not found")
-
-        needs_predefined_subdivisions = (
-            event.scoring_type == ScoringType.NET_STROKE or
-            (event.scoring_type == ScoringType.SYSTEM_36 and
-             event.system36_variant == System36Variant.MODIFIED)
-        )
-
-        if not needs_predefined_subdivisions:
-            return {
-                "total": 0,
-                "assigned": 0,
-                "skipped": 0,
-                "errors": [{
-                    "participant_name": "All",
-                    "reason": f"Event scoring type {event.scoring_type.value} does not use pre-defined sub-divisions"
-                }]
-            }
-
-        # Get all pre-defined sub-divisions for this event
-        subdivisions_query = select(EventDivision).where(
-            EventDivision.event_id == event_id,
-            EventDivision.is_active == True,
-            EventDivision.parent_division_id.is_not(None),
-            EventDivision.is_auto_assigned == False
-        ).order_by(EventDivision.handicap_min)
-
-        subdivisions = list(self.session.exec(subdivisions_query).all())
-
-        if not subdivisions:
-            return {
-                "total": 0,
-                "assigned": 0,
-                "skipped": 0,
-                "errors": [{
-                    "participant_name": "All",
-                    "reason": "No pre-defined sub-divisions configured for this event"
-                }]
-            }
-
-        # Get participants that need division assignment
-        # Only those without division or in parent divisions
-        parent_division_ids = list(set(s.parent_division_id for s in subdivisions if s.parent_division_id))
-
-        participants_query = select(Participant).where(
-            Participant.event_id == event_id
-        )
-
-        participants = list(self.session.exec(participants_query).all())
-
-        # Filter eligible participants
-        eligible_participants = []
-        for participant in participants:
-            # Skip if already in a sub-division
-            if participant.division_id:
-                division = self.session.get(EventDivision, participant.division_id)
-                if division and division.parent_division_id is not None:
-                    continue  # Already in a sub-division
-
-            # Skip if no declared handicap
-            if participant.declared_handicap is None:
-                continue
-
-            eligible_participants.append(participant)
-
-        if not eligible_participants:
-            return {
-                "total": len(participants),
-                "assigned": 0,
-                "skipped": len(participants),
-                "errors": [{
-                    "participant_name": "All",
-                    "reason": "No eligible participants found (all already assigned or missing handicap)"
-                }]
-            }
-
-        # Assignment logic
-        assigned_count = 0
-        skipped_count = 0
-        errors = []
-
-        for participant in eligible_participants:
-            try:
-                # Find matching sub-division based on declared handicap
-                matching_subdivision = None
-
-                for subdivision in subdivisions:
-                    if subdivision.handicap_min is None or subdivision.handicap_max is None:
-                        continue
-
-                    if subdivision.handicap_min <= participant.declared_handicap <= subdivision.handicap_max:
-                        # Check capacity
-                        if subdivision.max_participants:
-                            current_count = self.session.exec(
-                                select(func.count(Participant.id)).where(
-                                    Participant.division_id == subdivision.id
-                                )
-                            ).one()
-
-                            if current_count >= subdivision.max_participants:
-                                continue  # Try next sub-division
-
-                        matching_subdivision = subdivision
-                        break
-
-                if matching_subdivision:
-                    # Assign participant to sub-division
-                    participant.division_id = matching_subdivision.id
-                    participant.division = matching_subdivision.name
-                    self.session.add(participant)
-                    assigned_count += 1
-
-                    logger.info(f"Auto-assigned {participant.name} to {matching_subdivision.name} "
-                              f"(handicap: {participant.declared_handicap})")
-                else:
-                    errors.append({
-                        "participant_name": participant.name,
-                        "reason": f"No sub-division found for handicap {participant.declared_handicap}"
-                    })
-                    skipped_count += 1
-
-            except Exception as e:
-                errors.append({
-                    "participant_name": participant.name,
-                    "reason": f"Assignment error: {str(e)}"
-                })
-                skipped_count += 1
-                logger.error(f"Error auto-assigning {participant.name}: {str(e)}")
-
-        # Commit all changes
-        self.session.commit()
-
-        logger.info(f"Sub-division auto-assignment completed for event {event_id}: "
-                   f"{assigned_count} assigned, {skipped_count} skipped")
-
-        return {
-            "total": len(eligible_participants),
-            "assigned": assigned_count,
-            "skipped": skipped_count,
-            "errors": errors
-        }
-
     def assign_men_divisions_by_course_handicap(self, event_id: int) -> dict:
         """
         Assign Men divisions (A/B/C) based on course handicap for System 36 events.
@@ -692,10 +636,186 @@ class ParticipantService:
         
         logger.info(f"Men division assignment completed for event {event_id}: "
                    f"{assigned_count} assigned, {skipped_count} skipped")
-        
+
         return {
             "total": len(eligible_participants),
             "assigned": assigned_count,
+            "skipped": skipped_count,
+            "errors": errors
+        }
+
+    def reassign_men_divisions_by_system36_handicap(self, event_id: int) -> dict:
+        """
+        Reassign Men divisions (A/B/C/D) based on System 36 handicap for System 36 Standard events.
+
+        This method is specifically for System 36 Standard variant where Men divisions
+        are re-assigned after participants complete their rounds and System 36 handicaps
+        are calculated from their points.
+
+        Flow:
+        1. Get all Men participants (identified by division containing "Men")
+        2. Calculate System 36 handicap for each (36 - total_points)
+        3. Reassign to appropriate Men division based on System 36 handicap and division ranges
+        4. Skip Ladies, Seniors, and other divisions (no re-assignment)
+
+        Args:
+            event_id: Event ID to process
+
+        Returns:
+            dict: Assignment results with counts and errors
+        """
+        from models.event import ScoringType, System36Variant
+        from models.scorecard import Scorecard
+        from services.scoring_strategies import ScoringStrategyFactory
+
+        # Get event and verify it's System 36 Standard
+        event = self.session.get(Event, event_id)
+        if not event:
+            raise ValueError(f"Event {event_id} not found")
+
+        if event.scoring_type != ScoringType.SYSTEM_36:
+            raise ValueError(f"Event {event_id} is not a System 36 event")
+
+        if event.system36_variant != System36Variant.STANDARD:
+            raise ValueError(f"Event {event_id} is not using System 36 Standard variant")
+
+        # Get System 36 scoring strategy
+        strategy = ScoringStrategyFactory.get_strategy(ScoringType.SYSTEM_36)
+
+        # Get Men divisions configured for this event
+        # These should have handicap ranges defined
+        men_divisions_query = select(EventDivision).where(
+            EventDivision.event_id == event_id,
+            EventDivision.is_active == True,
+            EventDivision.division_type == "men"
+        ).order_by(EventDivision.handicap_min)
+
+        men_divisions = list(self.session.exec(men_divisions_query).all())
+
+        if not men_divisions:
+            return {
+                "total": 0,
+                "assigned": 0,
+                "skipped": 0,
+                "errors": [{"participant_name": "All", "reason": "No Men divisions configured for this event"}]
+            }
+
+        # Get all participants for this event
+        participants_query = select(Participant).where(
+            Participant.event_id == event_id
+        )
+        participants = list(self.session.exec(participants_query).all())
+
+        # Filter to only Men participants (exclude Ladies, Seniors, VIP, etc.)
+        eligible_participants = []
+        for participant in participants:
+            # Identify Men participants by division name containing "Men" or "men"
+            if participant.division and "men" in participant.division.lower():
+                # Exclude Ladies, Senior Men, VIP, etc.
+                if not any(keyword in participant.division.lower()
+                          for keyword in ["ladies", "women", "senior", "vip"]):
+                    eligible_participants.append(participant)
+
+        if not eligible_participants:
+            return {
+                "total": len(participants),
+                "assigned": 0,
+                "skipped": len(participants),
+                "errors": [{"participant_name": "All", "reason": "No eligible Men participants found for re-assignment"}]
+            }
+
+        # Assignment logic
+        assigned_count = 0
+        skipped_count = 0
+        errors = []
+
+        for participant in eligible_participants:
+            try:
+                # Get all scorecards for this participant
+                scorecards_query = select(Scorecard).where(
+                    Scorecard.participant_id == participant.id,
+                    Scorecard.strokes > 0
+                )
+                scorecards = list(self.session.exec(scorecards_query).all())
+
+                if not scorecards:
+                    errors.append({
+                        "participant_name": participant.name,
+                        "reason": "No scorecards found - participant hasn't completed any holes"
+                    })
+                    skipped_count += 1
+                    continue
+
+                # Calculate total points and holes completed
+                total_points = sum(scorecard.points or 0 for scorecard in scorecards)
+                holes_completed = len(scorecards)
+
+                # Calculate System 36 handicap (only for complete 18-hole rounds)
+                system36_handicap = strategy.calculate_system36_handicap(total_points, holes_completed)
+
+                if holes_completed != 18:
+                    errors.append({
+                        "participant_name": participant.name,
+                        "reason": f"Incomplete round ({holes_completed}/18 holes) - System 36 handicap not calculated"
+                    })
+                    skipped_count += 1
+                    continue
+
+                # Find matching Men division based on System 36 handicap
+                matching_division = None
+                for division in men_divisions:
+                    min_fits = division.handicap_min is None or system36_handicap >= division.handicap_min
+                    max_fits = division.handicap_max is None or system36_handicap <= division.handicap_max
+
+                    if min_fits and max_fits:
+                        # Check capacity
+                        if division.max_participants:
+                            current_count = self.session.exec(
+                                select(func.count(Participant.id)).where(
+                                    Participant.division_id == division.id
+                                )
+                            ).one()
+
+                            if current_count >= division.max_participants:
+                                continue  # Try next division
+
+                        matching_division = division
+                        break
+
+                if matching_division:
+                    # Reassign participant to new division
+                    old_division = participant.division
+                    participant.division_id = matching_division.id
+                    participant.division = matching_division.name
+                    self.session.add(participant)
+                    assigned_count += 1
+
+                    logger.info(f"Reassigned {participant.name} from {old_division} to {matching_division.name} "
+                              f"(System 36 handicap: {system36_handicap}, Points: {total_points})")
+                else:
+                    errors.append({
+                        "participant_name": participant.name,
+                        "reason": f"No Men division found for System 36 handicap {system36_handicap}"
+                    })
+                    skipped_count += 1
+
+            except Exception as e:
+                errors.append({
+                    "participant_name": participant.name,
+                    "reason": f"Reassignment error: {str(e)}"
+                })
+                skipped_count += 1
+                logger.error(f"Error reassigning {participant.name}: {str(e)}")
+
+        # Commit all changes
+        self.session.commit()
+
+        logger.info(f"Men division reassignment (System 36 Standard) completed for event {event_id}: "
+                   f"{assigned_count} reassigned, {skipped_count} skipped")
+
+        return {
+            "total": len(eligible_participants),
+            "reassigned": assigned_count,
             "skipped": skipped_count,
             "errors": errors
         }

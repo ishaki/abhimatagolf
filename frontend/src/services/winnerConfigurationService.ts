@@ -75,7 +75,6 @@ export interface WinnerConfiguration {
   include_best_net: boolean;
   exclude_incomplete_rounds: boolean;
   minimum_holes_for_ranking: number;
-  subdivision_ranges?: Record<string, Record<string, [number, number]>>;
   created_at: string;
   updated_at: string;
   created_by: number;
@@ -106,7 +105,6 @@ export interface WinnerConfigurationUpdate {
   include_best_net?: boolean;
   exclude_incomplete_rounds?: boolean;
   minimum_holes_for_ranking?: number;
-  subdivision_ranges?: Record<string, Record<string, [number, number]>>;
 }
 
 export interface WinnerManualOverride {
@@ -179,17 +177,3 @@ export const getCalculationTriggerLabel = (trigger: CalculationTrigger): string 
   return labels[trigger];
 };
 
-// Helper functions for subdivision ranges
-export const updateSubdivisionRanges = async (
-  eventId: number,
-  ranges: Record<string, Record<string, [number, number]>>
-): Promise<WinnerConfiguration> => {
-  return winnerConfigurationService.updateConfig(eventId, { subdivision_ranges: ranges });
-};
-
-export const getSubdivisionRanges = async (
-  eventId: number
-): Promise<Record<string, Record<string, [number, number]>> | undefined> => {
-  const config = await winnerConfigurationService.getConfig(eventId);
-  return config.subdivision_ranges;
-};

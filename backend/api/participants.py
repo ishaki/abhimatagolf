@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Response
 from sqlmodel import Session
 from typing import Optional, List
 from core.database import get_session
@@ -73,6 +73,7 @@ async def get_participant(
 @router.post("/", response_model=ParticipantResponse, status_code=status.HTTP_201_CREATED)
 async def create_participant(
     participant_data: ParticipantCreate,
+    response: Response,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
@@ -87,7 +88,13 @@ async def create_participant(
     participant_service = ParticipantService(session)
 
     try:
-        participant = participant_service.create_participant(participant_data)
+        participant, warning = participant_service.create_participant(participant_data)
+
+        # Add warning to response header if present
+        if warning:
+            response.headers["X-Validation-Warning"] = warning
+            logger.info(f"Participant created with warning: {warning}")
+
         return participant_service.get_participant_with_details(participant.id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -253,6 +260,7 @@ async def upload_participants(
 async def update_participant(
     participant_id: int,
     participant_data: ParticipantUpdate,
+    response: Response,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
@@ -270,7 +278,13 @@ async def update_participant(
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
 
-    updated_participant = participant_service.update_participant(participant_id, participant_data)
+    updated_participant, warning = participant_service.update_participant(participant_id, participant_data)
+
+    # Add warning to response header if present
+    if warning:
+        response.headers["X-Validation-Warning"] = warning
+        logger.info(f"Participant updated with warning: {warning}")
+
     return participant_service.get_participant_with_details(participant_id)
 
 

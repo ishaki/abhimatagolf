@@ -81,27 +81,41 @@ class WinnerService:
                 config
             )
 
-        # Calculate division winners (this is the primary calculation)
-        division_winners = WinnerService._calculate_division_winners(
+        # Step 1: Calculate special awards FIRST (Best Gross, Best Net) with cascading exclusion
+        special_award_winners, excluded_participant_ids = WinnerService._calculate_special_awards(
             session, event, participant_scorecards, config
         )
 
-        # For System 36 Standard and Stableford, create auto-assigned sub-divisions if configured
-        if config and config.subdivision_ranges and WinnerService._needs_auto_subdivisions(event):
-            logger.info(f"Processing auto-assigned sub-divisions for event {event_id}")
-            sub_division_winners = WinnerService._create_auto_subdivision_winners(
-                session, event, division_winners, config
-            )
-            division_winners.extend(sub_division_winners)
+        # Step 2: Filter out special award winners from division calculation pool
+        participant_scorecards_for_divisions = [
+            p_data for p_data in participant_scorecards
+            if p_data['participant'].id not in excluded_participant_ids
+        ]
 
-        # Save all winner results
-        for winner in division_winners:
+        logger.info(
+            f"Special awards: {len(special_award_winners)} winner(s), "
+            f"{len(excluded_participant_ids)} participant(s) excluded from division winners"
+        )
+
+        # Step 3: Calculate division winners (from remaining participants only)
+        division_winners = WinnerService._calculate_division_winners(
+            session, event, participant_scorecards_for_divisions, config
+        )
+
+        # Step 4: Combine all winners (special awards first, then division winners)
+        all_winners = special_award_winners + division_winners
+
+        # Step 5: Save all winner results
+        for winner in all_winners:
             session.add(winner)
 
         session.commit()
-        logger.info(f"Calculated {len(division_winners)} winner results for event {event_id}")
+        logger.info(
+            f"Calculated {len(all_winners)} total winner results for event {event_id} "
+            f"({len(special_award_winners)} special awards, {len(division_winners)} division winners)"
+        )
 
-        return division_winners
+        return all_winners
 
     @staticmethod
     def _build_participant_scorecards(session: Session, event: Event, participants: List[Participant]) -> List[Dict]:
@@ -199,6 +213,80 @@ class WinnerService:
                     # Recalculate net score using System 36 handicap
                     net_score = gross_score - calculated_handicap if gross_score > 0 else None
 
+            # System 36 Modified: Validate calculated handicap against division ranges (Men's divisions only)
+            is_disqualified = False
+            disqualification_reason = None
+            original_division_id = None
+            division_reassigned = False
+
+            if (event.scoring_type == ScoringType.SYSTEM_36 and
+                event.system36_variant == System36Variant.MODIFIED and
+                holes_completed >= 18 and
+                calculated_handicap is not None and
+                participant.event_division is not None):
+
+                from models.event_division import DivisionType
+
+                # Only validate for Men's divisions with defined handicap ranges
+                if participant.event_division.division_type == DivisionType.MEN:
+                    current_division = participant.event_division
+                    current_min = current_division.handicap_min
+                    current_max = current_division.handicap_max
+
+                    # Skip validation if division doesn't have defined handicap ranges
+                    if current_min is None or current_max is None:
+                        logger.debug(
+                            f"Skipping validation for {participant.name} - "
+                            f"division '{current_division.name}' has no handicap range defined"
+                        )
+                    # Scenario A: Calculated handicap < Division Min (better player)
+                    elif calculated_handicap < current_min:
+                        logger.info(
+                            f"System 36 Modified: Participant {participant.name} calculated handicap "
+                            f"{calculated_handicap} is below division '{current_division.name}' minimum {current_min}"
+                        )
+
+                        # Find appropriate Men's division
+                        new_division = WinnerService._find_appropriate_mens_division(
+                            session, event.id, calculated_handicap
+                        )
+
+                        if new_division and new_division.id != current_division.id:
+                            # Reassign to new division
+                            logger.warning(
+                                f"REASSIGNMENT: {participant.name} moved from '{current_division.name}' "
+                                f"to '{new_division.name}' (calculated hcp: {calculated_handicap})"
+                            )
+                            original_division_id = current_division.id
+                            division_reassigned = True
+                            # Update participant reference (for winner calculation)
+                            participant.division_id = new_division.id
+                            participant.division = new_division.name
+                            participant.event_division = new_division
+                        else:
+                            # No appropriate division found - disqualify
+                            logger.warning(
+                                f"DISQUALIFICATION: {participant.name} has no appropriate Men's division "
+                                f"for calculated handicap {calculated_handicap}"
+                            )
+                            is_disqualified = True
+                            disqualification_reason = (
+                                f"Calculated System 36 handicap ({calculated_handicap:.1f}) is below "
+                                f"division minimum and no appropriate division found"
+                            )
+
+                    # Scenario B: Calculated handicap > Division Max (worse player)
+                    elif calculated_handicap > current_max:
+                        logger.warning(
+                            f"DISQUALIFICATION: {participant.name} calculated handicap {calculated_handicap} "
+                            f"exceeds division '{current_division.name}' maximum {current_max}"
+                        )
+                        is_disqualified = True
+                        disqualification_reason = (
+                            f"Calculated System 36 handicap ({calculated_handicap:.1f}) exceeds "
+                            f"division maximum ({current_max})"
+                        )
+
             participant_data = {
                 'participant': participant,
                 'gross_score': gross_score if holes_completed > 0 else None,
@@ -212,6 +300,11 @@ class WinnerService:
                 'system36_points': system36_points,  # Total System 36 points
                 'back_nine_points': back_nine_points,  # Back 9 points for tie-breaking
                 'calculated_handicap': calculated_handicap,  # System 36 handicap
+                # System 36 Modified validation fields
+                'is_disqualified': is_disqualified,
+                'disqualification_reason': disqualification_reason,
+                'original_division_id': original_division_id,
+                'division_reassigned': division_reassigned,
             }
 
             participant_scorecards.append(participant_data)
@@ -266,6 +359,223 @@ class WinnerService:
         ).all()
         for winner in existing_winners:
             session.delete(winner)
+
+    @staticmethod
+    def _calculate_special_awards(
+        session: Session,
+        event: Event,
+        participant_scorecards: List[Dict],
+        config: Optional[WinnerConfiguration] = None
+    ) -> Tuple[List[WinnerResult], set]:
+        """
+        Calculate special award winners (Best Gross, Best Net) with cascading exclusion.
+
+        Business Rule: One person can win ONLY ONE award/position.
+        Cascading exclusion order:
+        1. Best Gross winner → excluded from Best Net and Division Winners
+        2. Best Net winner → excluded from Division Winners
+
+        Args:
+            session: Database session
+            event: Event
+            participant_scorecards: List of participant data with scores
+            config: Winner configuration
+
+        Returns:
+            Tuple of:
+            - List[WinnerResult]: Special award winners
+            - set: Participant IDs that won special awards (for exclusion from division winners)
+        """
+        special_award_winners = []
+        excluded_participant_ids = set()
+
+        if not config:
+            return special_award_winners, excluded_participant_ids
+
+        # Get strategy for this scoring type
+        strategy = WinnerStrategyFactory.get_strategy(event.scoring_type)
+
+        # Step 1: Calculate Best Gross (if enabled)
+        if config.include_best_gross:
+            # Find participant with lowest gross score
+            valid_participants = [
+                p_data for p_data in participant_scorecards
+                if p_data.get('gross_score') is not None and p_data['gross_score'] > 0
+            ]
+
+            if valid_participants:
+                # Sort by gross score (ascending - lower is better)
+                sorted_by_gross = sorted(
+                    valid_participants,
+                    key=lambda p: (
+                        p['gross_score'],
+                        p.get('back_nine_total', 999),
+                        p.get('last_6_total', 999),
+                        p.get('last_3_total', 999),
+                        p.get('last_hole_score', 999),
+                        p['participant'].declared_handicap
+                    )
+                )
+
+                best_gross_data = sorted_by_gross[0]
+                participant = best_gross_data['participant']
+
+                # Get teebox information
+                teebox_name = participant.teebox.name if participant.teebox else None
+                teebox_course_rating = participant.teebox.course_rating if participant.teebox else None
+                teebox_slope_rating = participant.teebox.slope_rating if participant.teebox else None
+
+                # Get System 36 handicap if applicable
+                system36_handicap = None
+                if event.scoring_type == ScoringType.SYSTEM_36:
+                    system36_handicap = best_gross_data.get('calculated_handicap')
+
+                # Create winner result
+                best_gross_winner = WinnerResult(
+                    event_id=event.id,
+                    participant_id=participant.id,
+                    participant_name=participant.name,
+                    division=participant.division,
+                    division_id=participant.division_id,
+                    overall_rank=None,  # Not applicable for special awards
+                    division_rank=None,  # Not applicable for special awards
+                    gross_score=best_gross_data['gross_score'],
+                    net_score=best_gross_data.get('net_score'),
+                    declared_handicap=participant.declared_handicap,
+                    course_handicap=participant.course_handicap,
+                    system36_handicap=system36_handicap,
+                    teebox_name=teebox_name,
+                    teebox_course_rating=teebox_course_rating,
+                    teebox_slope_rating=teebox_slope_rating,
+                    award_category="Best Gross",  # Special award category
+                    is_tied=False,
+                    calculated_at=datetime.utcnow()
+                )
+
+                special_award_winners.append(best_gross_winner)
+                excluded_participant_ids.add(participant.id)
+
+                logger.info(
+                    f"Best Gross Award: {participant.name} (Gross: {best_gross_data['gross_score']}) "
+                    f"- excluded from subsequent winner selections"
+                )
+
+        # Step 2: Calculate Best Net (if enabled and scoring type supports net)
+        if config.include_best_net and event.scoring_type in [ScoringType.NET_STROKE, ScoringType.SYSTEM_36]:
+            # Filter out Best Gross winner (cascading exclusion)
+            remaining_participants = [
+                p_data for p_data in participant_scorecards
+                if p_data['participant'].id not in excluded_participant_ids
+                and p_data.get('net_score') is not None
+            ]
+
+            if remaining_participants:
+                # Sort by net score (ascending - lower is better)
+                sorted_by_net = sorted(
+                    remaining_participants,
+                    key=lambda p: (
+                        p['net_score'],
+                        p.get('back_nine_total', 999),
+                        p.get('last_6_total', 999),
+                        p.get('last_3_total', 999),
+                        p.get('last_hole_score', 999),
+                        p['participant'].declared_handicap
+                    )
+                )
+
+                best_net_data = sorted_by_net[0]
+                participant = best_net_data['participant']
+
+                # Get teebox information
+                teebox_name = participant.teebox.name if participant.teebox else None
+                teebox_course_rating = participant.teebox.course_rating if participant.teebox else None
+                teebox_slope_rating = participant.teebox.slope_rating if participant.teebox else None
+
+                # Get System 36 handicap if applicable
+                system36_handicap = None
+                if event.scoring_type == ScoringType.SYSTEM_36:
+                    system36_handicap = best_net_data.get('calculated_handicap')
+
+                # Create winner result
+                best_net_winner = WinnerResult(
+                    event_id=event.id,
+                    participant_id=participant.id,
+                    participant_name=participant.name,
+                    division=participant.division,
+                    division_id=participant.division_id,
+                    overall_rank=None,  # Not applicable for special awards
+                    division_rank=None,  # Not applicable for special awards
+                    gross_score=best_net_data['gross_score'],
+                    net_score=best_net_data['net_score'],
+                    declared_handicap=participant.declared_handicap,
+                    course_handicap=participant.course_handicap,
+                    system36_handicap=system36_handicap,
+                    teebox_name=teebox_name,
+                    teebox_course_rating=teebox_course_rating,
+                    teebox_slope_rating=teebox_slope_rating,
+                    award_category="Best Net",  # Special award category
+                    is_tied=False,
+                    calculated_at=datetime.utcnow()
+                )
+
+                special_award_winners.append(best_net_winner)
+                excluded_participant_ids.add(participant.id)
+
+                logger.info(
+                    f"Best Net Award: {participant.name} (Net: {best_net_data['net_score']}) "
+                    f"- excluded from division winner selections"
+                )
+
+        return special_award_winners, excluded_participant_ids
+
+    @staticmethod
+    def _find_appropriate_mens_division(
+        session: Session,
+        event_id: int,
+        calculated_handicap: float
+    ) -> Optional[EventDivision]:
+        """
+        Find appropriate Men's division for a calculated System 36 handicap.
+
+        Returns the Men's division where:
+        - handicap_min <= calculated_handicap <= handicap_max
+        - division_type == 'men'
+
+        Args:
+            session: Database session
+            event_id: Event ID
+            calculated_handicap: Calculated System 36 handicap (36 - total points)
+
+        Returns:
+            EventDivision if found, None otherwise
+        """
+        from models.event_division import DivisionType
+
+        query = (
+            select(EventDivision)
+            .where(EventDivision.event_id == event_id)
+            .where(EventDivision.division_type == DivisionType.MEN)
+            .where(EventDivision.handicap_min <= calculated_handicap)
+            .where(EventDivision.handicap_max >= calculated_handicap)
+            .where(EventDivision.is_active == True)
+            .order_by(EventDivision.handicap_min)  # Prefer lower handicap divisions
+        )
+
+        division = session.exec(query).first()
+
+        if division:
+            logger.info(
+                f"Found appropriate Men's division '{division.name}' "
+                f"for calculated handicap {calculated_handicap} "
+                f"(range: {division.handicap_min}-{division.handicap_max})"
+            )
+        else:
+            logger.warning(
+                f"No appropriate Men's division found for calculated handicap {calculated_handicap} "
+                f"in event {event_id}"
+            )
+
+        return division
 
     @staticmethod
     def _calculate_overall_winners(
@@ -383,10 +693,11 @@ class WinnerService:
         strategy = WinnerStrategyFactory.get_strategy(event.scoring_type)
 
         for division in divisions:
-            # Filter participant scorecards by division
+            # Filter participant scorecards by division (exclude disqualified)
             division_participants = [
                 p_data for p_data in participant_scorecards
                 if p_data['participant'].division_id == division.id
+                and not p_data.get('is_disqualified', False)  # Exclude disqualified participants
             ]
 
             if not division_participants:
@@ -447,6 +758,10 @@ class WinnerService:
                 if event.scoring_type == ScoringType.SYSTEM_36:
                     system36_handicap = participant_data.get('calculated_handicap')
 
+                # Get division reassignment tracking
+                original_division_id = participant_data.get('original_division_id')
+                division_reassigned = participant_data.get('division_reassigned', False)
+
                 # Create winner result
                 winner = WinnerResult(
                     event_id=event.id,
@@ -464,6 +779,8 @@ class WinnerService:
                     teebox_name=teebox_name,
                     teebox_course_rating=teebox_course_rating,
                     teebox_slope_rating=teebox_slope_rating,
+                    original_division_id=original_division_id,  # Track division change
+                    division_reassigned=division_reassigned,  # Flag for reassignment
                     is_tied=False,  # Will be updated if tied
                     calculated_at=datetime.utcnow()
                 )
@@ -628,158 +945,3 @@ class WinnerService:
         )
         result = session.exec(query).first()
         return result
-
-    # ==================== SUB-DIVISION SUPPORT ====================
-
-    @staticmethod
-    def _needs_auto_subdivisions(event: Event) -> bool:
-        """
-        Determine if event scoring type requires auto-assigned sub-divisions.
-
-        Returns True for:
-        - System 36 Standard (handicap calculated from scores)
-        - Stableford (future support)
-        """
-        return (
-            event.scoring_type == ScoringType.SYSTEM_36 and
-            event.system36_variant == System36Variant.STANDARD
-        ) or event.scoring_type == ScoringType.STABLEFORD
-
-    @staticmethod
-    def _create_auto_subdivision_winners(
-        session: Session,
-        event: Event,
-        division_winners: List[WinnerResult],
-        config: WinnerConfiguration
-    ) -> List[WinnerResult]:
-        """
-        Create auto-assigned sub-divisions and winners based on subdivision_ranges.
-
-        For System 36 Standard and Stableford:
-        1. Takes winners from parent divisions (e.g., Men)
-        2. Groups them by handicap ranges defined in config.subdivision_ranges
-        3. Creates auto-assigned sub-divisions (e.g., Men A, Men B, Men C)
-        4. Creates WinnerResult records for each sub-division group
-
-        Args:
-            session: Database session
-            event: Event
-            division_winners: List of winners from parent divisions
-            config: Winner configuration with subdivision_ranges
-
-        Returns:
-            List of new WinnerResult objects for sub-divisions
-        """
-        from services.event_division_service import EventDivisionService
-
-        if not config.subdivision_ranges:
-            return []
-
-        division_service = EventDivisionService(session)
-        sub_division_winners = []
-
-        # Parse subdivision_ranges: {"Men": {"A": [0, 12], "B": [13, 20], "C": [21, 36]}}
-        for parent_division_name, sub_ranges in config.subdivision_ranges.items():
-            # Get parent division
-            parent_division_query = select(EventDivision).where(
-                EventDivision.event_id == event.id,
-                EventDivision.name == parent_division_name,
-                EventDivision.parent_division_id.is_(None)  # Ensure it's a parent
-            )
-            parent_division = session.exec(parent_division_query).first()
-
-            if not parent_division:
-                logger.warning(f"Parent division '{parent_division_name}' not found for event {event.id}")
-                continue
-
-            # Get winners from this parent division
-            parent_winners = [
-                w for w in division_winners
-                if w.division_id == parent_division.id
-            ]
-
-            if not parent_winners:
-                logger.info(f"No winners in parent division '{parent_division_name}' to subdivide")
-                continue
-
-            # Create or get auto-assigned sub-divisions
-            subdivisions_map = {}
-            for sub_name, (handicap_min, handicap_max) in sub_ranges.items():
-                full_subdivision_name = f"{parent_division_name} {sub_name}"
-
-                # Check if sub-division already exists
-                existing_subdivision = session.exec(
-                    select(EventDivision).where(
-                        EventDivision.event_id == event.id,
-                        EventDivision.name == full_subdivision_name,
-                        EventDivision.parent_division_id == parent_division.id
-                    )
-                ).first()
-
-                if existing_subdivision:
-                    # Update handicap ranges if changed
-                    existing_subdivision.handicap_min = float(handicap_min)
-                    existing_subdivision.handicap_max = float(handicap_max)
-                    existing_subdivision.is_auto_assigned = True
-                    session.add(existing_subdivision)
-                    subdivisions_map[sub_name] = existing_subdivision
-                else:
-                    # Create new auto-assigned sub-division
-                    subdivision = division_service.create_auto_subdivision(
-                        parent_division_id=parent_division.id,
-                        name=full_subdivision_name,
-                        handicap_min=float(handicap_min),
-                        handicap_max=float(handicap_max)
-                    )
-                    subdivisions_map[sub_name] = subdivision
-
-            # Group winners by handicap into sub-divisions
-            for sub_name, subdivision in subdivisions_map.items():
-                # Filter winners that fall into this handicap range
-                sub_winners = []
-                for winner in parent_winners:
-                    # Use calculated handicap for System 36, declared for others
-                    handicap_to_use = (
-                        winner.system36_handicap if event.scoring_type == ScoringType.SYSTEM_36
-                        else winner.declared_handicap
-                    )
-
-                    if handicap_to_use is None:
-                        continue
-
-                    if subdivision.handicap_min <= handicap_to_use <= subdivision.handicap_max:
-                        sub_winners.append(winner)
-
-                if not sub_winners:
-                    logger.info(f"No winners in sub-division '{subdivision.name}'")
-                    continue
-
-                # Sort sub_winners by division_rank (already calculated in parent)
-                sub_winners.sort(key=lambda w: w.division_rank)
-
-                # Create WinnerResult for each winner in this sub-division
-                for rank, parent_winner in enumerate(sub_winners, start=1):
-                    sub_winner = WinnerResult(
-                        event_id=event.id,
-                        participant_id=parent_winner.participant_id,
-                        participant_name=parent_winner.participant_name,
-                        division=subdivision.name,
-                        division_id=subdivision.id,
-                        overall_rank=None,
-                        division_rank=rank,  # Rank within sub-division
-                        gross_score=parent_winner.gross_score,
-                        net_score=parent_winner.net_score,
-                        declared_handicap=parent_winner.declared_handicap,
-                        course_handicap=parent_winner.course_handicap,
-                        system36_handicap=parent_winner.system36_handicap,
-                        teebox_name=parent_winner.teebox_name,
-                        teebox_course_rating=parent_winner.teebox_course_rating,
-                        teebox_slope_rating=parent_winner.teebox_slope_rating,
-                        is_tied=parent_winner.is_tied,  # Preserve tie status
-                        calculated_at=datetime.utcnow()
-                    )
-                    sub_division_winners.append(sub_winner)
-
-                logger.info(f"Created {len(sub_winners)} winner(s) for sub-division '{subdivision.name}'")
-
-        return sub_division_winners

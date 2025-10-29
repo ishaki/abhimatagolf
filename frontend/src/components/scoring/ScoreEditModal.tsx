@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Save, X, RefreshCw } from 'lucide-react';
+import { Save, X, RefreshCw, Target } from 'lucide-react';
 import {
   bulkSubmitScores,
   ScorecardResponse,
@@ -40,6 +40,34 @@ const ScoreEditModal: React.FC<ScoreEditModalProps> = ({ scorecard, onClose }) =
       [holeNumber]: strokes,
     }));
     setHasChanges(true);
+  };
+
+  const handleAssignBogey = () => {
+    const allHoles = [...scorecard.front_nine, ...scorecard.back_nine];
+    let hasEmptyHoles = false;
+    
+    const newScores = { ...scores };
+    
+    allHoles.forEach((hole) => {
+      // Check if hole is empty (not in scores or score is 0)
+      if (!scores[hole.hole_number] || scores[hole.hole_number] === 0) {
+        newScores[hole.hole_number] = hole.hole_par + 1;
+        hasEmptyHoles = true;
+      }
+    });
+    
+    if (hasEmptyHoles) {
+      setScores(newScores);
+      setHasChanges(true);
+      toast.success('Bogey scores assigned to all empty holes');
+    } else {
+      toast.info('No empty holes to fill');
+    }
+  };
+  
+  const getEmptyHolesCount = () => {
+    const allHoles = [...scorecard.front_nine, ...scorecard.back_nine];
+    return allHoles.filter((hole) => !scores[hole.hole_number] || scores[hole.hole_number] === 0).length;
   };
 
   const handleSave = async () => {
@@ -214,6 +242,16 @@ const ScoreEditModal: React.FC<ScoreEditModalProps> = ({ scorecard, onClose }) =
             </div>
 
             <div className="flex gap-2">
+              <Button
+                onClick={handleAssignBogey}
+                variant="outline"
+                disabled={saving || getEmptyHolesCount() === 0}
+                className="border-purple-400 text-purple-700 bg-purple-50 hover:bg-purple-100 hover:border-purple-500"
+                title="This will assign bogey to empty score with bogey (+1)"
+              >
+                <Target className="mr-2 h-4 w-4" />
+                Assign Bogey
+              </Button>
               <Button
                 onClick={() => onClose()}
                 variant="outline"

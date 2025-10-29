@@ -195,26 +195,17 @@ const EventForm: React.FC<EventFormProps> = ({ event, onSuccess, onCancel }) => 
                   </select>
                 </div>
 
-                {/* System 36 Variant - Only show for System 36 */}
-                {formData.scoring_type === 'system_36' && (
-                  <div>
-                    <Label htmlFor="system36_variant">System 36 Variant *</Label>
-                    <select
-                      id="system36_variant"
-                      value={formData.system36_variant}
-                      onChange={(e) => handleInputChange('system36_variant', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      required
-                    >
-                      <option value="standard">Standard (Course Handicap for Men)</option>
-                      <option value="modified">Modified (Declared Handicap for Men)</option>
-                    </select>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Standard: Men divisions assigned by course handicap after teebox assignment.<br/>
-                      Modified: Men divisions assigned by declared handicap at the beginning.
-                    </p>
-                  </div>
-                )}
+                {/* Active Status */}
+                <div className="flex items-center space-x-2">
+                  <input
+                    id="is_active"
+                    type="checkbox"
+                    checked={formData.is_active}
+                    onChange={(e) => handleInputChange('is_active', e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <Label htmlFor="is_active">Event is active</Label>
+                </div>
               </div>
 
               {/* Right Column */}
@@ -234,17 +225,26 @@ const EventForm: React.FC<EventFormProps> = ({ event, onSuccess, onCancel }) => 
                   </p>
                 </div>
 
-                {/* Active Status */}
-                <div className="flex items-center space-x-2">
-                  <input
-                    id="is_active"
-                    type="checkbox"
-                    checked={formData.is_active}
-                    onChange={(e) => handleInputChange('is_active', e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <Label htmlFor="is_active">Event is active</Label>
-                </div>
+                {/* System 36 Variant - Only show for System 36 */}
+                {formData.scoring_type === 'system_36' && (
+                  <div>
+                    <Label htmlFor="system36_variant">System 36 Variant *</Label>
+                    <select
+                      id="system36_variant"
+                      value={formData.system36_variant}
+                      onChange={(e) => handleInputChange('system36_variant', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      required
+                    >
+                      <option value="standard">Standard</option>
+                      <option value="modified">Modified</option>
+                    </select>
+                    <p className="text-sm text-gray-600 mt-1">
+                      <strong>Standard:</strong> Declared handicap not required. Men divisions re-assigned after scoring based on calculated System 36 handicap. Ladies/Seniors stay in original divisions.<br/>
+                      <strong>Modified:</strong> Declared handicap required. All participants stay in their assigned divisions. Division assignment validated against declared handicap.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 

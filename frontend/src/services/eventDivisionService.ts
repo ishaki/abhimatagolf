@@ -79,8 +79,14 @@ export interface EventDivisionTree {
   is_auto_assigned: boolean;
   handicap_min?: number;
   handicap_max?: number;
+  use_course_handicap_for_assignment?: boolean;
   max_participants?: number;
   teebox_id?: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  participant_count?: number;
+  teebox?: Teebox;
   sub_divisions: EventDivisionTree[];  // Recursive structure
 }
 
@@ -174,53 +180,33 @@ class EventDivisionService {
     return response.data;
   }
 
-  // ==================== SUB-DIVISION METHODS ====================
-
-  /**
-   * Get hierarchical division structure for an event.
-   * Returns divisions with nested sub-divisions.
-   */
   async getDivisionsTree(eventId: number): Promise<EventDivisionTree[]> {
-    const response = await eventDivisionsApi.get(`/event-divisions/event/${eventId}/tree`);
-    return response.data;
-  }
+    // Get flat list of divisions
+    const divisions = await this.getDivisionsForEvent(eventId);
 
-  /**
-   * Create a sub-division under a parent division.
-   * For Net Stroke and System 36 Modified events.
-   */
-  async createSubdivision(data: {
-    parent_division_id: number;
-    name: string;
-    handicap_min?: number;
-    handicap_max?: number;
-    description?: string;
-  }): Promise<EventDivision> {
-    const response = await eventDivisionsApi.post('/event-divisions/subdivisions', null, {
-      params: data
-    });
-    return response.data;
-  }
-
-  /**
-   * Delete a sub-division (only if no participants assigned).
-   */
-  async deleteSubdivision(subdivisionId: number): Promise<void> {
-    await eventDivisionsApi.delete(`/event-divisions/subdivisions/${subdivisionId}`);
-  }
-
-  /**
-   * Auto-assign participants to pre-defined sub-divisions based on declared handicap.
-   * For Net Stroke and System 36 Modified events.
-   */
-  async autoAssignSubdivisions(eventId: number): Promise<{
-    total: number;
-    assigned: number;
-    skipped: number;
-    errors: Array<{participant_name: string; reason: string}>;
-  }> {
-    const response = await eventDivisionsApi.post(`/event-divisions/event/${eventId}/auto-assign-subdivisions`);
-    return response.data;
+    // Convert flat list to hierarchical tree structure
+    // For now, return divisions as top-level items with empty sub_divisions
+    // (Future: implement parent-child relationship if needed)
+    return divisions.map(div => ({
+      id: div.id,
+      event_id: div.event_id,
+      name: div.name,
+      description: div.description,
+      division_type: div.division_type,
+      parent_division_id: div.parent_division_id || null,
+      is_auto_assigned: div.is_auto_assigned || false,
+      handicap_min: div.handicap_min,
+      handicap_max: div.handicap_max,
+      use_course_handicap_for_assignment: div.use_course_handicap_for_assignment,
+      max_participants: div.max_participants,
+      teebox_id: div.teebox_id,
+      is_active: div.is_active,
+      created_at: div.created_at,
+      updated_at: div.updated_at,
+      participant_count: div.participant_count,
+      teebox: div.teebox,
+      sub_divisions: [] // Empty for now - can be populated if parent-child relationships exist
+    }));
   }
 }
 

@@ -92,11 +92,11 @@ class ExcelService:
         For other events, Nett = Total Gross - Course Handicap.
         """
         try:
-            from models.event import Event, ScoringType
+            from models.event import Event, ScoringType, System36Variant
             from models.participant import Participant
             from models.scorecard import Scorecard
             from models.course import Hole
-            from models.event_division import EventDivision
+            from models.event_division import EventDivision, DivisionType
             from services.scoring_strategies.system36 import System36ScoringStrategy
             
             # Get event
@@ -119,6 +119,12 @@ class ExcelService:
             divisions_query = select(EventDivision).where(EventDivision.event_id == event_id)
             divisions = list(self.session.exec(divisions_query).all())
             division_map = {div.id: div for div in divisions}
+
+            # Get winner results to check for division reassignments
+            from models.winner_result import WinnerResult
+            winner_results_query = select(WinnerResult).where(WinnerResult.event_id == event_id)
+            winner_results = list(self.session.exec(winner_results_query).all())
+            winner_result_map = {wr.participant_id: wr for wr in winner_results}
             
             # Create Excel file in memory
             output = BytesIO()
@@ -275,14 +281,82 @@ class ExcelService:
                         course_handicap = participant.course_handicap
                         nett_score = total_gross - course_handicap if total_gross > 0 else ''
                     
+                    # Get current division name
+                    current_division_name = division_name or participant.division or ''
+
+                    # Check for division reassignment from winner results
+                    original_division_name = current_division_name  # Default to current
+                    updated_division_name = current_division_name   # Default to current
+
+                    winner_result = winner_result_map.get(participant.id)
+                    if winner_result and winner_result.original_division_id:
+                        # This participant was reassigned - get original division name
+                        original_division = division_map.get(winner_result.original_division_id)
+                        if original_division:
+                            original_division_name = original_division.name
+                            updated_division_name = current_division_name
+
+                    # Check for disqualification (System 36 Modified validation)
+                    is_disqualified = False
+                    disqualification_reason = ''
+
+                    # Special award winners are EXEMPT from disqualification
+                    # (They compete cross-division for best gross/net, not within division)
+                    is_special_award_winner = winner_result and winner_result.award_category is not None
+
+                    if (not is_special_award_winner and
+                        event.scoring_type == ScoringType.SYSTEM_36 and
+                        event.system36_variant == System36Variant.MODIFIED and
+                        total_gross > 0):
+
+                        # Get calculated System 36 handicap
+                        holes_completed = sum(1 for hole in holes if scorecard_map.get(hole.id) and scorecard_map.get(hole.id).strokes > 0)
+
+                        if holes_completed >= 18 and participant.division_id:
+                            calculated_handicap = 36 - total_points
+                            current_division = division_map.get(participant.division_id)
+
+                            # Only validate for Men's divisions with defined handicap ranges
+                            if current_division and current_division.division_type == DivisionType.MEN:
+                                current_min = current_division.handicap_min
+                                current_max = current_division.handicap_max
+
+                                if current_min is not None and current_max is not None:
+                                    # Check if calculated handicap exceeds division maximum
+                                    if calculated_handicap > current_max:
+                                        is_disqualified = True
+                                        disqualification_reason = f'System 36 HCP ({calculated_handicap:.1f}) > Division Max ({current_max})'
+                                    # Check if calculated handicap is below division minimum (and no reassignment found)
+                                    elif calculated_handicap < current_min and not winner_result:
+                                        is_disqualified = True
+                                        disqualification_reason = f'System 36 HCP ({calculated_handicap:.1f}) < Division Min ({current_min}), no appropriate division'
+
+                    # Build notes column (includes special awards, division winners, and disqualification reasons)
+                    notes = ''
+                    if is_special_award_winner and winner_result:
+                        # Show special award category (e.g., "Best Gross Winner", "Best Net Winner")
+                        notes = f'{winner_result.award_category} Winner'
+                    elif winner_result and winner_result.division_rank:
+                        # Show division/group winner ranking with division name
+                        rank_suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(winner_result.division_rank, 'th')
+                        division_name = winner_result.division or current_division_name or 'Division'
+                        notes = f'{division_name} - {winner_result.division_rank}{rank_suffix} Place'
+                    elif is_disqualified:
+                        # Show disqualification reason
+                        notes = disqualification_reason
+
                     # Build row for Sheet 3 (Summary) - ordered columns
                     summary_row_ordered = {
                         'Participant': participant.name,
+                        'Original Division': original_division_name,
+                        'Updated Division': updated_division_name if updated_division_name != original_division_name else original_division_name,
                         'Declared Hcp': participant.declared_handicap,
                         'Course Handicap': course_handicap if total_gross > 0 else '',
                         'Total Gross': total_gross if total_gross > 0 else '',
                         'Nett': nett_score if isinstance(nett_score, int) or isinstance(nett_score, float) else '',
-                        'Total Point': total_points if event.scoring_type == ScoringType.SYSTEM_36 and total_gross > 0 else ''
+                        'Total Point': total_points if event.scoring_type == ScoringType.SYSTEM_36 and total_gross > 0 else '',
+                        'Disqualified': 'Yes' if is_disqualified else 'No',
+                        'Notes': notes
                     }
                     
                     scores_data.append(scores_row)

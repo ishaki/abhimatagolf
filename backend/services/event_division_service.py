@@ -197,18 +197,11 @@ class EventDivisionService:
 
         return stats
 
-    # ==================== SUB-DIVISION SUPPORT ====================
-
     def create_default_divisions(self, event_id: int) -> List[EventDivision]:
         """
-        Create default divisions based on event scoring type and system36 variant.
+        Create default divisions for an event.
 
-        Rules:
-        - Stroke Play: Base divisions only (Men, Ladies, Senior, VIP)
-        - Net Stroke: Base + pre-defined sub-divisions for Men (A/B/C)
-        - System 36 Standard: Base divisions only (sub-divisions created at winner calculation)
-        - System 36 Modified: Base + pre-defined sub-divisions for Men (A/B/C)
-        - Stableford: Base divisions only (sub-divisions created at winner calculation)
+        Creates base divisions: Men, Ladies, Senior, VIP.
         """
         event = self.session.get(Event, event_id)
         if not event:
@@ -219,42 +212,13 @@ class EventDivisionService:
         if existing_divisions:
             return existing_divisions
 
-        divisions_to_create = []
-
-        # Determine if we need pre-defined sub-divisions
-        needs_predefined_subdivisions = (
-            event.scoring_type == ScoringType.NET_STROKE or
-            (event.scoring_type == ScoringType.SYSTEM_36 and
-             event.system36_variant == System36Variant.MODIFIED)
-        )
-
-        # Create Men division (with sub-divisions if needed)
-        if needs_predefined_subdivisions:
-            # Create parent Men division
-            men_parent = EventDivision(
-                event_id=event_id,
-                name="Men",
-                division_type=DivisionType.MEN,
-                description="Men's Division (Parent)"
-            )
-            self.session.add(men_parent)
-            self.session.flush()  # Get the ID
-            divisions_to_create.append(men_parent)
-
-            # Note: Sub-divisions will be created by event admin with custom handicap ranges
-            # We don't create them here as per requirement "Admin defines at event creation"
-        else:
-            # Create simple Men division
-            men_division = EventDivision(
+        divisions_to_create = [
+            EventDivision(
                 event_id=event_id,
                 name="Men",
                 division_type=DivisionType.MEN,
                 description="Men's Division"
-            )
-            divisions_to_create.append(men_division)
-
-        # Create other base divisions (Ladies, Senior, VIP)
-        other_divisions = [
+            ),
             EventDivision(
                 event_id=event_id,
                 name="Ladies",
@@ -275,9 +239,8 @@ class EventDivisionService:
             )
         ]
 
-        for division in other_divisions:
+        for division in divisions_to_create:
             self.session.add(division)
-            divisions_to_create.append(division)
 
         self.session.commit()
 
@@ -286,218 +249,3 @@ class EventDivisionService:
             self.session.refresh(division)
 
         return divisions_to_create
-
-    def create_subdivision(
-        self,
-        parent_division_id: int,
-        name: str,
-        handicap_min: Optional[float] = None,
-        handicap_max: Optional[float] = None,
-        description: Optional[str] = None
-    ) -> EventDivision:
-        """
-        Create a sub-division under a parent division.
-
-        Args:
-            parent_division_id: ID of the parent division
-            name: Name of the sub-division (e.g., "Men A", "Men B", "Men C")
-            handicap_min: Minimum handicap for this sub-division
-            handicap_max: Maximum handicap for this sub-division
-            description: Optional description
-        """
-        # Verify parent division exists
-        parent_division = self.session.get(EventDivision, parent_division_id)
-        if not parent_division:
-            raise ValueError(f"Parent division with id {parent_division_id} not found")
-
-        # Verify parent division doesn't already have a parent (no nested sub-divisions)
-        if parent_division.parent_division_id is not None:
-            raise ValueError("Cannot create sub-division under another sub-division")
-
-        # Check if sub-division name already exists for this parent
-        existing_subdivision = self.session.exec(
-            select(EventDivision).where(
-                EventDivision.parent_division_id == parent_division_id,
-                EventDivision.name == name
-            )
-        ).first()
-
-        if existing_subdivision:
-            raise ValueError(f"Sub-division '{name}' already exists under '{parent_division.name}'")
-
-        # Validate handicap ranges with existing sub-divisions
-        if handicap_min is not None and handicap_max is not None:
-            self._validate_handicap_range(parent_division_id, handicap_min, handicap_max)
-
-        # Create the sub-division
-        subdivision = EventDivision(
-            event_id=parent_division.event_id,
-            name=name,
-            parent_division_id=parent_division_id,
-            division_type=parent_division.division_type,
-            handicap_min=handicap_min,
-            handicap_max=handicap_max,
-            description=description or f"Sub-division of {parent_division.name}",
-            is_auto_assigned=False  # Pre-defined sub-divisions
-        )
-
-        self.session.add(subdivision)
-        self.session.commit()
-        self.session.refresh(subdivision)
-
-        return subdivision
-
-    def create_auto_subdivision(
-        self,
-        parent_division_id: int,
-        name: str,
-        handicap_min: float,
-        handicap_max: float
-    ) -> EventDivision:
-        """
-        Create an auto-assigned sub-division (for System 36 Standard, Stableford).
-        These are created during winner calculation.
-        """
-        parent_division = self.session.get(EventDivision, parent_division_id)
-        if not parent_division:
-            raise ValueError(f"Parent division with id {parent_division_id} not found")
-
-        subdivision = EventDivision(
-            event_id=parent_division.event_id,
-            name=name,
-            parent_division_id=parent_division_id,
-            division_type=parent_division.division_type,
-            handicap_min=handicap_min,
-            handicap_max=handicap_max,
-            description=f"Auto-assigned sub-division of {parent_division.name}",
-            is_auto_assigned=True
-        )
-
-        self.session.add(subdivision)
-        self.session.commit()
-        self.session.refresh(subdivision)
-
-        return subdivision
-
-    def get_divisions_tree(self, event_id: int) -> List[Dict[str, Any]]:
-        """
-        Get hierarchical division structure for an event.
-
-        Returns:
-            List of division dictionaries with nested sub-divisions:
-            [
-                {
-                    "id": 1,
-                    "name": "Men",
-                    "parent_division_id": null,
-                    "sub_divisions": [
-                        {"id": 2, "name": "Men A", "parent_division_id": 1, ...},
-                        {"id": 3, "name": "Men B", "parent_division_id": 1, ...}
-                    ],
-                    ...
-                }
-            ]
-        """
-        # Get all divisions for the event
-        all_divisions = self.session.exec(
-            select(EventDivision).where(
-                EventDivision.event_id == event_id,
-                EventDivision.is_active == True
-            ).order_by(EventDivision.name)
-        ).all()
-
-        # Build tree structure
-        division_map = {}
-        for division in all_divisions:
-            division_dict = {
-                "id": division.id,
-                "event_id": division.event_id,
-                "name": division.name,
-                "description": division.description,
-                "division_type": division.division_type,
-                "parent_division_id": division.parent_division_id,
-                "is_auto_assigned": division.is_auto_assigned,
-                "handicap_min": division.handicap_min,
-                "handicap_max": division.handicap_max,
-                "max_participants": division.max_participants,
-                "teebox_id": division.teebox_id,
-                "sub_divisions": []
-            }
-            division_map[division.id] = division_dict
-
-        # Organize into tree
-        root_divisions = []
-        for division_dict in division_map.values():
-            if division_dict["parent_division_id"] is None:
-                # Root division
-                root_divisions.append(division_dict)
-            else:
-                # Sub-division - add to parent's sub_divisions list
-                parent = division_map.get(division_dict["parent_division_id"])
-                if parent:
-                    parent["sub_divisions"].append(division_dict)
-
-        return root_divisions
-
-    def _validate_handicap_range(
-        self,
-        parent_division_id: int,
-        handicap_min: float,
-        handicap_max: float
-    ):
-        """
-        Validate that new handicap range doesn't overlap with existing sub-divisions.
-        """
-        if handicap_min > handicap_max:
-            raise ValueError(f"handicap_min ({handicap_min}) cannot be greater than handicap_max ({handicap_max})")
-
-        # Get existing sub-divisions for this parent
-        existing_subdivisions = self.session.exec(
-            select(EventDivision).where(
-                EventDivision.parent_division_id == parent_division_id,
-                EventDivision.is_active == True
-            )
-        ).all()
-
-        for subdivision in existing_subdivisions:
-            if subdivision.handicap_min is None or subdivision.handicap_max is None:
-                continue
-
-            # Check for overlap
-            if not (handicap_max < subdivision.handicap_min or handicap_min > subdivision.handicap_max):
-                raise ValueError(
-                    f"Handicap range [{handicap_min}, {handicap_max}] overlaps with "
-                    f"existing sub-division '{subdivision.name}' [{subdivision.handicap_min}, {subdivision.handicap_max}]"
-                )
-
-    def delete_subdivision(self, subdivision_id: int) -> bool:
-        """
-        Delete a sub-division.
-        Can only delete if no participants are assigned.
-        """
-        subdivision = self.session.get(EventDivision, subdivision_id)
-        if not subdivision:
-            return False
-
-        # Verify it's actually a sub-division
-        if subdivision.parent_division_id is None:
-            raise ValueError("Cannot use this method to delete a parent division")
-
-        # Check for assigned participants
-        participant_count = self.session.exec(
-            select(func.count(Participant.id)).where(
-                Participant.division_id == subdivision_id
-            )
-        ).one()
-
-        if participant_count > 0:
-            raise ValueError(
-                f"Cannot delete sub-division '{subdivision.name}' - "
-                f"{participant_count} participants are assigned to it"
-            )
-
-        # Hard delete (since it's a sub-division with no participants)
-        self.session.delete(subdivision)
-        self.session.commit()
-
-        return True

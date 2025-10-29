@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@types/react-world-flags": "^1.6.0",
+    "react-world-flags": "^1.6.0"
+  }
+}

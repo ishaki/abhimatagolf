@@ -169,8 +169,15 @@ const EventOverview: React.FC<EventOverviewProps> = ({
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between">
-              <div className="text-lg font-semibold text-gray-900">
-                {getScoringTypeLabel(event.scoring_type)}
+              <div>
+                <div className="text-lg font-semibold text-gray-900">
+                  {getScoringTypeLabel(event.scoring_type)}
+                </div>
+                {event.scoring_type === 'system_36' && event.system36_variant && (
+                  <div className="text-xs text-gray-600 mt-1 capitalize">
+                    {event.system36_variant}
+                  </div>
+                )}
               </div>
               <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
                 <svg className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">

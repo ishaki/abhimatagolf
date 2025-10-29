@@ -17,7 +17,6 @@ import MultiParticipantScorecard from '@/components/scoring/MultiParticipantScor
 import AddEventUserModal from '@/components/events/AddEventUserModal';
 import EventUserPermissionsModal from '@/components/events/EventUserPermissionsModal';
 import WinnerConfigurationForm from '@/components/winners/WinnerConfigurationForm';
-import SubDivisionConfigurator from '@/components/winners/SubDivisionConfigurator';
 import { ExternalLink, Trophy, Wand2, Loader2, Settings, Target } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useConfirm } from '@/hooks/useConfirm';
@@ -409,17 +408,6 @@ const EventDetailPage: React.FC = () => {
                     <span>Winner Configuration</span>
                   </TabsTrigger>
                 )}
-                {canConfigureWinners(event?.id, event) && event && (event.scoring_type === 'system_36' || event.scoring_type === 'stableford') && (
-                  <TabsTrigger
-                    value="sub-divisions"
-                    className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg rounded-lg mx-1 transition-all duration-300 hover:bg-purple-50 flex items-center space-x-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                    </svg>
-                    <span>Sub-Divisions</span>
-                  </TabsTrigger>
-                )}
                 {canAccessWinners(event?.id, event) && (
                   <TabsTrigger
                     value="winners"
@@ -612,19 +600,6 @@ const EventDetailPage: React.FC = () => {
               </TabsContent>
             )}
 
-            {canConfigureWinners(event?.id, event) && event && (event.scoring_type === 'system_36' || event.scoring_type === 'stableford') && (
-              <TabsContent value="sub-divisions" className="p-8 pb-20 m-0 pt-2 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
-                <SubDivisionConfigurator
-                  eventId={event.id}
-                  scoringType={event.scoring_type}
-                  onConfigSaved={() => {
-                    toast.success('Sub-division configuration saved');
-                    setRefreshKey(prev => prev + 1);
-                  }}
-                />
-              </TabsContent>
-            )}
-
             {canAccessWinners(event?.id, event) && (
               <TabsContent value="winners" className="p-8 pb-20 m-0 pt-2 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
               <div className="max-w-4xl mx-auto">
@@ -643,11 +618,6 @@ const EventDetailPage: React.FC = () => {
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
                       <p className="text-sm text-blue-700 mb-3">
                         Winners must be calculated before they can be displayed. This will analyze all scorecards and determine rankings with proper tie-breaking.
-                        {event && (event.scoring_type === 'system_36' || event.scoring_type === 'stableford') && (
-                          <span className="block mt-2 font-semibold">
-                            💡 Configure sub-divisions in the "Winner Config" tab before calculating to group winners by handicap range.
-                          </span>
-                        )}
                       </p>
 
                     </div>

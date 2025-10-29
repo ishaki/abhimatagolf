@@ -28,11 +28,18 @@ const MultiDivisionWinnerTable: React.FC<MultiDivisionWinnerTableProps> = ({
   eventName,
   scoringType
 }) => {
-  // Group winners by division and keep them sorted by division_rank
+  // Separate special awards from division winners
+  const { specialAwards, divisionWinners } = useMemo(() => {
+    const special = winners.filter(w => w.award_category !== null && w.award_category !== undefined);
+    const divisions = winners.filter(w => w.award_category === null || w.award_category === undefined);
+    return { specialAwards: special, divisionWinners: divisions };
+  }, [winners]);
+
+  // Group division winners by division and keep them sorted by division_rank
   const groupedWinners = useMemo(() => {
     const groups: { [key: string]: WinnerResult[] } = {};
 
-    winners.forEach(winner => {
+    divisionWinners.forEach(winner => {
       const division = winner.division || 'No Division';
       if (!groups[division]) {
         groups[division] = [];
@@ -50,7 +57,7 @@ const MultiDivisionWinnerTable: React.FC<MultiDivisionWinnerTableProps> = ({
     });
 
     return groups;
-  }, [winners]);
+  }, [divisionWinners]);
 
   // Get sorted division names for consistent display order
   const sortedDivisionNames = useMemo(() => {
@@ -108,6 +115,134 @@ const MultiDivisionWinnerTable: React.FC<MultiDivisionWinnerTableProps> = ({
 
   return (
     <div className="w-full space-y-6">
+      {/* Special Awards Section - Rendered FIRST */}
+      {specialAwards.length > 0 && (
+        <div className="bg-gradient-to-br from-yellow-50 via-amber-50 to-yellow-100 rounded-xl shadow-2xl overflow-hidden border-2 border-yellow-400">
+          {/* Special Awards Header */}
+          <div className="bg-gradient-to-r from-yellow-500 to-amber-600 px-6 py-4">
+            <h3 className="text-2xl font-bold text-white flex items-center gap-3">
+              <Trophy className="h-7 w-7" fill="currentColor" />
+              🏆 Special Awards
+            </h3>
+            <p className="text-yellow-100 text-sm mt-1">
+              {specialAwards.length} Special Award{specialAwards.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+
+          {/* Special Awards Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-yellow-200/80">
+                <tr>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-yellow-900 uppercase tracking-wider">
+                    Award
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-yellow-900 uppercase tracking-wider">
+                    Player Name
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-yellow-900 uppercase tracking-wider">
+                    Division
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-yellow-900 uppercase tracking-wider">
+                    Declared HCP
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-yellow-900 uppercase tracking-wider">
+                    Gross
+                  </th>
+                  {scoringType === 'net_stroke' && (
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-yellow-900 uppercase tracking-wider">
+                      Course HCP
+                    </th>
+                  )}
+                  {scoringType === 'system_36' && (
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-yellow-900 uppercase tracking-wider">
+                      System 36 HCP
+                    </th>
+                  )}
+                  {(scoringType === 'net_stroke' || scoringType === 'system_36') && (
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-yellow-900 uppercase tracking-wider">
+                      Net
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-yellow-200">
+                {specialAwards.map((winner, index) => (
+                  <tr
+                    key={winner.id}
+                    className={`hover:bg-yellow-50 transition-colors ${
+                      index % 2 === 0 ? 'bg-yellow-50/50' : 'bg-white'
+                    }`}
+                  >
+                    {/* Award Category */}
+                    <td className="px-4 py-4 whitespace-nowrap text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <Trophy className="h-6 w-6 text-yellow-600" fill="currentColor" />
+                        <span className="text-base font-bold text-yellow-700">
+                          {winner.award_category}
+                        </span>
+                      </div>
+                    </td>
+                    {/* Player Name */}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className="text-base font-bold text-gray-900">
+                        {winner.participant_name}
+                      </span>
+                    </td>
+                    {/* Division */}
+                    <td className="px-4 py-3 whitespace-nowrap text-center">
+                      <span className="text-sm font-medium text-gray-700">
+                        {winner.division || '-'}
+                      </span>
+                    </td>
+                    {/* Declared HCP */}
+                    <td className="px-4 py-3 whitespace-nowrap text-center">
+                      <span className="text-sm font-semibold text-gray-900">
+                        {winner.declared_handicap}
+                      </span>
+                    </td>
+                    {/* Gross Score */}
+                    <td className="px-4 py-3 whitespace-nowrap text-center">
+                      <span className="text-base font-bold text-gray-900">
+                        {winner.gross_score}
+                      </span>
+                    </td>
+                    {/* Course HCP (if net_stroke) */}
+                    {scoringType === 'net_stroke' && (
+                      <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <span className="text-sm font-semibold text-gray-900">
+                          {winner.course_handicap}
+                        </span>
+                      </td>
+                    )}
+                    {/* System 36 HCP (if system_36) */}
+                    {scoringType === 'system_36' && (
+                      <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <span className="text-sm font-semibold text-purple-700">
+                          {winner.system36_handicap !== null && winner.system36_handicap !== undefined
+                            ? winner.system36_handicap
+                            : '-'}
+                        </span>
+                      </td>
+                    )}
+                    {/* Net Score (if applicable) */}
+                    {(scoringType === 'net_stroke' || scoringType === 'system_36') && (
+                      <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <span className="text-base font-bold text-blue-600">
+                          {winner.net_score !== null && winner.net_score !== undefined
+                            ? winner.net_score
+                            : '-'}
+                        </span>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Division Winners - One section per division */}
       {sortedDivisionNames.map((divisionName) => {
         const divisionWinners = groupedWinners[divisionName];

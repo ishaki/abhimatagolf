@@ -169,6 +169,7 @@ class LiveScoreService:
             event_id=event.id,
             event_name=event.name,
             handicap=participant.declared_handicap,
+            country=participant.country,
             front_nine=front_nine,
             out_total=out_total,
             out_to_par=out_to_par,

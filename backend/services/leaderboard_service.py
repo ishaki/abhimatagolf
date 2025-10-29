@@ -59,11 +59,27 @@ class LeaderboardService:
         filter_options: Optional[LeaderboardFilter] = None
     ) -> LeaderboardResponse:
         """Calculate fresh leaderboard data"""
-        
+        from models.event import System36Variant
+        from services.participant_service import ParticipantService
+
         # Get event details
         event = self.session.get(Event, event_id)
         if not event:
             raise ValueError(f"Event {event_id} not found")
+
+        # For System 36 Standard, trigger Men division re-assignment before calculating leaderboard
+        if event.scoring_type == ScoringType.SYSTEM_36 and event.system36_variant == System36Variant.STANDARD:
+            try:
+                participant_service = ParticipantService(self.session)
+                result = participant_service.reassign_men_divisions_by_system36_handicap(event_id)
+                logger.info(f"Division re-assignment for System 36 Standard event {event_id}: "
+                          f"{result['reassigned']} reassigned, {result['skipped']} skipped")
+            except ValueError as e:
+                # Log but don't fail leaderboard calculation if re-assignment fails
+                logger.warning(f"Division re-assignment failed for event {event_id}: {str(e)}")
+            except Exception as e:
+                # Log but don't fail leaderboard calculation for other errors
+                logger.error(f"Unexpected error during division re-assignment for event {event_id}: {str(e)}")
 
         # Get course details
         course = self.session.get(Course, event.course_id)

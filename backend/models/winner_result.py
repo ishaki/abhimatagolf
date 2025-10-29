@@ -35,6 +35,10 @@ class WinnerResult(SQLModel, table=True):
     teebox_course_rating: Optional[float] = Field(default=None)
     teebox_slope_rating: Optional[int] = Field(default=None)
 
+    # Division reassignment tracking (System 36 Modified)
+    original_division_id: Optional[int] = Field(default=None, description="Original division ID before reassignment")
+    division_reassigned: bool = Field(default=False, description="True if division was changed due to calculated handicap")
+
     # Tie-breaking information
     is_tied: bool = Field(default=False)
     tied_with: Optional[Dict[str, Any]] = Field(default=None, sa_type=JSON)  # List of participant IDs tied with

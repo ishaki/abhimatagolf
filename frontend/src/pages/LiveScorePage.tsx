@@ -15,6 +15,7 @@ import { getLiveScore, SortBy, LiveScoreWebSocket } from '@/services/liveScoreSe
 import { ScorecardResponse } from '@/services/scorecardService';
 import { toast } from 'sonner';
 import { tokenStorage } from '@/utils/tokenStorage';
+import { getCountryFlag } from '@/utils/countryUtils';
 
 // ========== AUTO-SCROLL CONFIGURATION ==========
 // Easy configuration for auto-scroll behavior
@@ -496,7 +497,12 @@ const LiveScorePage: React.FC = () => {
                       </td>
                       {/* Player Name */}
                       <td className="border border-gray-200 px-4 py-2 font-medium text-sm">
-                        <div>{scorecard.participant_name} ({scorecard.handicap})</div>
+                        <div className="flex items-center gap-2">
+                          {scorecard.country && getCountryFlag(scorecard.country) && (
+                            <span className="text-xl leading-none">{getCountryFlag(scorecard.country)}</span>
+                          )}
+                          <span>{scorecard.participant_name} ({scorecard.handicap})</span>
+                        </div>
                       </td>
 
                       {/* Front 9 Scores */}

@@ -119,14 +119,6 @@ class WinnerConfiguration(SQLModel, table=True):
         description="Minimum holes required to be eligible for ranking"
     )
 
-    # Sub-division configuration for auto-assigned divisions (System 36 Standard, Stableford)
-    # Format: {"Men": {"A": [0, 12], "B": [13, 20], "C": [21, 36]}, "Ladies": {"A": [0, 18], "B": [19, 36]}}
-    subdivision_ranges: Optional[Dict[str, Any]] = Field(
-        default=None,
-        sa_type=JSON,
-        description="Handicap ranges for auto-assigned sub-divisions (System 36 Standard, Stableford only)"
-    )
-
     # Metadata
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

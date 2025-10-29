@@ -29,6 +29,7 @@ export interface ScorecardResponse {
   event_id: number;
   event_name: string;
   handicap: number;
+  country?: string | null;
   front_nine: HoleScoreResponse[];
   out_total: number;
   out_to_par: number;

@@ -35,7 +35,7 @@ export default function Layout({ children }: LayoutProps) {
                   </svg>
                 </div>
                 <h1 className="text-xl font-bold text-white">
-                  Abhimata Golf
+                  Abhimata Golf Management
                 </h1>
               </div>
               <div className="ml-12 flex space-x-8">

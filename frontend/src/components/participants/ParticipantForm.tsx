@@ -11,6 +11,7 @@ import {
   updateParticipant,
 } from '@/services/participantService';
 import { eventDivisionService, EventDivision } from '@/services/eventDivisionService';
+import { Event, getEvent } from '@/services/eventService';
 import { toast } from 'sonner';
 
 // Common countries list for dropdown
@@ -62,7 +63,7 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({
     declared_handicap: '0',
     division: '',
     division_id: '',
-    country: '',
+    country: 'Indonesia',
     sex: '',
     phone_no: '',
     event_status: 'Ok',
@@ -71,6 +72,8 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({
   const [loading, setLoading] = useState(false);
   const [divisions, setDivisions] = useState<EventDivision[]>([]);
   const [loadingDivisions, setLoadingDivisions] = useState(false);
+  const [event, setEvent] = useState<Event | null>(null);
+  const [loadingEvent, setLoadingEvent] = useState(false);
 
   useEffect(() => {
     if (participant) {
@@ -91,12 +94,13 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({
   useEffect(() => {
     if (eventId) {
       loadDivisions();
+      loadEvent();
     }
   }, [eventId]);
 
   const loadDivisions = async () => {
     if (!eventId) return;
-    
+
     try {
       setLoadingDivisions(true);
       const data = await eventDivisionService.getDivisionsForEvent(eventId);
@@ -106,6 +110,21 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({
       // Don't show error toast as this is not critical for form functionality
     } finally {
       setLoadingDivisions(false);
+    }
+  };
+
+  const loadEvent = async () => {
+    if (!eventId) return;
+
+    try {
+      setLoadingEvent(true);
+      const eventData = await getEvent(eventId);
+      setEvent(eventData);
+    } catch (error) {
+      console.error('Error loading event:', error);
+      // Don't show error toast as this is not critical for form functionality
+    } finally {
+      setLoadingEvent(false);
     }
   };
 
@@ -121,11 +140,26 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({
       return;
     }
 
+    // Determine if declared handicap is required based on event type
+    const isSystem36Modified = event?.scoring_type === 'system_36' && event?.system36_variant === 'modified';
+    const isSystem36Standard = event?.scoring_type === 'system_36' && event?.system36_variant === 'standard';
+
     const handicap = parseFloat(formData.declared_handicap);
-    if (isNaN(handicap) || handicap < 0 || handicap > 54) {
-      toast.error('Handicap must be between 0 and 54');
-      return;
+
+    // For System 36 Modified, handicap is required and must be valid
+    if (isSystem36Modified) {
+      if (isNaN(handicap) || handicap < 0 || handicap > 54) {
+        toast.error('Declared handicap is required and must be between 0 and 54 for System 36 Modified');
+        return;
+      }
+    } else if (!isSystem36Standard) {
+      // For non-System 36 Standard events, validate if provided
+      if (formData.declared_handicap && (isNaN(handicap) || handicap < 0 || handicap > 54)) {
+        toast.error('Handicap must be between 0 and 54');
+        return;
+      }
     }
+    // For System 36 Standard, declared handicap is optional (can be 0 or any valid value)
 
     if (!participant && !eventId) {
       toast.error('Event ID is required for new participants');
@@ -227,7 +261,9 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({
 
                 {/* Declared Handicap */}
                 <div>
-                  <Label htmlFor="declared_handicap" className="text-sm font-medium">Declared Handicap *</Label>
+                  <Label htmlFor="declared_handicap" className="text-sm font-medium">
+                    Declared Handicap {event?.scoring_type === 'system_36' && event?.system36_variant === 'modified' ? '*' : ''}
+                  </Label>
                   <Input
                     id="declared_handicap"
                     type="number"
@@ -238,8 +274,15 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({
                     onChange={(e) => handleInputChange('declared_handicap', e.target.value)}
                     placeholder="0 - 54"
                     className="mt-1"
-                    required
+                    required={event?.scoring_type === 'system_36' && event?.system36_variant === 'modified'}
                   />
+                  {event?.scoring_type === 'system_36' && (
+                    <p className="text-xs text-gray-600 mt-1">
+                      {event.system36_variant === 'standard'
+                        ? 'Optional - Men divisions will be re-assigned based on System 36 handicap after scoring'
+                        : 'Required - Division assignment will be validated against this handicap'}
+                    </p>
+                  )}
                 </div>
 
                 {/* Division */}

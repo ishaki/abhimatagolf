@@ -87,20 +87,12 @@ class WinnerConfigurationUpdate(BaseModel):
     include_best_net: Optional[bool] = None
     exclude_incomplete_rounds: Optional[bool] = None
     minimum_holes_for_ranking: Optional[int] = Field(None, ge=9, le=18)
-    subdivision_ranges: Optional[Dict[str, Any]] = Field(
-        None,
-        description="Handicap ranges for auto-assigned sub-divisions (System 36 Standard, Stableford only)"
-    )
 
 
 class WinnerConfigurationResponse(WinnerConfigurationBase):
     """Schema for winner configuration response"""
     id: int
     event_id: int
-    subdivision_ranges: Optional[Dict[str, Any]] = Field(
-        None,
-        description="Handicap ranges for auto-assigned sub-divisions (System 36 Standard, Stableford only)"
-    )
     created_at: datetime
     updated_at: datetime
     created_by: int
